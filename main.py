@@ -611,7 +611,7 @@ def train_full_model(
     if d_path is None:
         d_path = parse_args()['dataset_path']
     if images is None:
-        images = ['flair', 'mprage']
+        images = ['flair', 't1']
     if filters is None:
         filters = [32, 128, 256, 1024]
     if patch_size is None:
@@ -622,8 +622,9 @@ def train_full_model(
         overlap = (patch_size // 2,) * 3
         patch_size = (patch_size,) * 3
     if train_list is None:
+        tmp = get_dirs(d_path)  #if p_tag in p
         p_train = sorted(
-            [p for p in get_dirs(d_path) if p_tag in p],
+            [p for p in tmp],
             key=lambda p: int(''.join(filter(str.isdigit, p)))
         )
     else:
