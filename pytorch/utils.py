@@ -355,7 +355,7 @@ def get_normalised_image(
 
 def to_torch_var(
         np_array,
-        device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+        device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         requires_grad=False,
         dtype=torch.float32
 ):

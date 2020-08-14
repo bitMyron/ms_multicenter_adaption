@@ -92,10 +92,10 @@ class BaseModel(nn.Module):
             # First, we do a forward pass through the network.
             torch.cuda.synchronize()
             if isinstance(x, list):
-                x_cuda = tuple(x_i.to(self.device) for x_i in x)
+                x_cuda = tuple(nn.DataParallel(x_i).to(self.device) for x_i in x)
                 pred_labels = self(*x_cuda)
             else:
-                pred_labels = self(x.to(self.device))
+                pred_labels = self(nn.DataParallel(x).to(self.device))
 
             # After that, we can compute the relevant losses.
             if train:
@@ -416,7 +416,7 @@ class Autoencoder(BaseModel):
             self,
             conv_filters,
             device=torch.device(
-                "cuda:2,3" if torch.cuda.is_available() else "cpu"
+                "cuda" if torch.cuda.is_available() else "cpu"
             ),
             n_inputs=1,
             kernel=3,
@@ -492,7 +492,7 @@ class Autoencoder(BaseModel):
         # connections.
         down_inputs = []
         for c in self.down:
-            c.to(self.device)
+            nn.DataParallel(c).to(self.device)
             input_s = F.dropout3d(
                 c(input_s), self.dropout, self.training
             )
@@ -501,11 +501,11 @@ class Autoencoder(BaseModel):
             if self.pooling:
                 input_s = F.max_pool3d(input_s, 2)
 
-        self.u.to(self.device)
+        nn.DataParallel(self.u).to(self.device)
         input_s = F.dropout3d(self.u(input_s), self.dropout, self.training)
 
         for d, i in zip(self.up, down_inputs[::-1]):
-            d.to(self.device)
+            nn.DataParallel(d).to(self.device)
             # Remember that pooling is optional
             if self.pooling:
                 input_s = F.dropout3d(
@@ -655,7 +655,7 @@ class LesionsUNet(BaseModel):
     def __init__(
             self,
             conv_filters=None,
-            device=torch.device("cuda:2,3" if torch.cuda.is_available() else "cpu"),
+            device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
             n_images=1,
             dropout=0,
             verbose=0,

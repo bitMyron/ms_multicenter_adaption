@@ -18,5 +18,5 @@ CUDA_VISIBLE_DEVICES=2,3
 # The weights are defined on the function test_folder (line 654 main.py) and take into account the images.
 # By default it's FLAIR+T1.
 [ -e nohup.out ] && rm nohup.out
-nohup python main.py -d /home/mayang/data/LIT -o /home/mayang/data/models/test --run-train &
+nohup CUDA_VISIBLE_DEVICES=2,3 python main.py -d /home/mayang/data/LIT -o /home/mayang/data/models/test --run-train &
 
