@@ -2,9 +2,11 @@
 The main file running inside the docker (the starting point)
 """
 # Import the required packages
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2,3])
+
 import numpy as np
 import argparse
-import os
 import time
 from subprocess import check_call
 from functools import reduce
@@ -20,7 +22,6 @@ from pytorch.utils import color_codes, get_dirs, print_message, time_to_string
 from pytorch.models import LesionsUNet
 from pytorch.datasets import LoadLesionCroppingDataset
 
-os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2,3])
 
 
 def parse_args():
@@ -166,6 +167,81 @@ def get_data(
 
 
 def get_lit_data(
+        d_path='data/LIT',
+        images=None,
+        verbose=1,
+        preload=True,
+):
+    """
+        Function that loads the images and masks of a list of patients.
+        :param d_path: Path to the LSI data.
+        :param images: Image names (prefixes).
+        :param verbose: Level of verbosity
+        :return: list of numpy arrays for the concatenated images, lesion
+        mask and brain mask.
+    """
+
+    brain_mask_name = 'brainmask.nii.gz'
+    lesion_mask_name = 'consensus_gt.nii.gz'
+    tmp = get_dirs(d_path)  # if p_tag in p
+    p_train = sorted(
+        [p for p in tmp],
+        key=lambda p: int(''.join(filter(str.isdigit, p)))
+    )
+
+    brain_mask_names = [
+        os.path.join(d_path, p_path, '_'.join([p_path, brain_mask_name])) for p_path in p_train
+    ]
+
+    lesion_names = [
+        os.path.join(d_path, p_path, '_'.join([p_path, lesion_mask_name])) for p_path in p_train
+    ]
+
+    if d_path is None:
+        d_path = parse_args()['dataset_path']
+    if images is None:
+        images = ['flair', 't1w']
+    images = [tmp.upper() for tmp in images]
+
+    # Brain masks (either a real mask, or an image masked)
+    if verbose > 1:
+        print('Loading the brain masks')
+    brains = list(map(get_mask, brain_mask_names))
+
+    # Lesion masks (we are using this function for training, so there should
+    # always be a lesion mask).
+
+    if verbose > 1:
+        print('Loading the lesion masks')
+    lesions = list(map(get_mask, lesion_names))
+
+    # Finally we either load all images and normalise them (a lot of RAM) or we
+    # leave that job to the dataset object.
+    if verbose > 1:
+        print('Loading the images')
+    if preload:
+        data = [
+            np.stack(
+                [
+                    get_normalised_image(
+                        os.path.join(d_path, p, '%s_%s.nii.gz' % (p, im)),
+                        mask_i,
+                    ) for im in images
+                ],
+                axis=0
+            ) for p, mask_i in zip(p_train, brains)
+        ]
+    else:
+        data = [
+            [
+                os.path.join(d_path, p, '%s_%s.nii.gz' % (p, im))
+                for im in images
+            ] for p, mask_i in zip(p_train, brains)
+        ]
+
+    return data, lesions, brains
+
+def get_messg_data(
         d_path='data/LIT',
         images=None,
         verbose=1,
