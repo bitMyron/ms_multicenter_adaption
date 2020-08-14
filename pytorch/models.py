@@ -416,7 +416,7 @@ class Autoencoder(BaseModel):
             self,
             conv_filters,
             device=torch.device(
-                "cuda:0" if torch.cuda.is_available() else "cpu"
+                "cuda:2,3" if torch.cuda.is_available() else "cpu"
             ),
             n_inputs=1,
             kernel=3,
@@ -655,7 +655,7 @@ class LesionsUNet(BaseModel):
     def __init__(
             self,
             conv_filters=None,
-            device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+            device=torch.device("cuda:2,3" if torch.cuda.is_available() else "cpu"),
             n_images=1,
             dropout=0,
             verbose=0,
