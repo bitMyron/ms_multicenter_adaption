@@ -92,10 +92,10 @@ class BaseModel(nn.Module):
             # First, we do a forward pass through the network.
             torch.cuda.synchronize()
             if isinstance(x, list):
-                x_cuda = tuple(nn.DataParallel(x_i).to(self.device) for x_i in x)
+                x_cuda = tuple(x_i.to(self.device) for x_i in x)
                 pred_labels = self(*x_cuda)
             else:
-                pred_labels = self(nn.DataParallel(x).to(self.device))
+                pred_labels = self(x.to(self.device))
 
             # After that, we can compute the relevant losses.
             if train:
@@ -492,7 +492,7 @@ class Autoencoder(BaseModel):
         # connections.
         down_inputs = []
         for c in self.down:
-            nn.DataParallel(c).to(self.device)
+            c.to(self.device)
             input_s = F.dropout3d(
                 c(input_s), self.dropout, self.training
             )
@@ -505,7 +505,7 @@ class Autoencoder(BaseModel):
         input_s = F.dropout3d(self.u(input_s), self.dropout, self.training)
 
         for d, i in zip(self.up, down_inputs[::-1]):
-            nn.DataParallel(d).to(self.device)
+            d.to(self.device)
             # Remember that pooling is optional
             if self.pooling:
                 input_s = F.dropout3d(
