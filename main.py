@@ -20,6 +20,8 @@ from pytorch.utils import color_codes, get_dirs, print_message, time_to_string
 from pytorch.models import LesionsUNet
 from pytorch.datasets import LoadLesionCroppingDataset
 
+os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2,3])
+
 
 def parse_args():
     """
