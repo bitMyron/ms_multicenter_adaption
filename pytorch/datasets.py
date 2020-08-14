@@ -95,7 +95,7 @@ class LoadLesionCroppingDataset(Dataset):
     def __init__(
             self,
             cases, labels, masks, patch_size=32, overlap=0, filtered=True,
-            verbose=0
+            verbose=1
     ):
         # Init
         data_shape = masks[0].shape
@@ -163,10 +163,16 @@ class LoadLesionCroppingDataset(Dataset):
                 )
             self.cases.append(
                 np.stack(
-                    [get_normalised_image(name, mask)[bb_i] for name in case],
+                    case,
                     axis=0
                 )
             )
+            # self.cases.append(
+            #     np.stack(
+            #         [get_normalised_image(image, mask)[bb_i] for image in case],
+            #         axis=0
+            #     )
+            # )
         if verbose > 1:
             print('\033[K', end='\r')
 
