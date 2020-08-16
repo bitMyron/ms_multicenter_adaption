@@ -271,11 +271,11 @@ def get_messg_data(
     )
 
     brain_mask_names = [
-        os.path.join(d_path, p_path, '_'.join([p_path, brain_mask_name])) for p_path in p_train
+        os.path.join(d_path, p_path, brain_mask_name) for p_path in p_train
     ]
 
     lesion_names = [
-        os.path.join(d_path, p_path, '_'.join([p_path, lesion_mask_name])) for p_path in p_train
+        os.path.join(d_path, p_path, lesion_mask_name) for p_path in p_train
     ]
 
     if d_path is None:
