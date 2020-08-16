@@ -501,7 +501,7 @@ class Autoencoder(BaseModel):
             if self.pooling:
                 input_s = F.max_pool3d(input_s, 2)
 
-        nn.DataParallel(self.u, device_ids=[2, 3]).to(self.device)
+        nn.DataParallel(self.u).to(self.device)
         input_s = F.dropout3d(self.u(input_s), self.dropout, self.training)
 
         for d, i in zip(self.up, down_inputs[::-1]):
