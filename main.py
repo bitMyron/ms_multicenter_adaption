@@ -8,6 +8,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2,3])
 import numpy as np
 import argparse
 import time
+import torch
 from subprocess import check_call
 from functools import reduce
 from scipy import ndimage as nd
@@ -1086,14 +1087,14 @@ def test_folder(
     # We just have to test the network and save
     # the results.
     seg_net = LesionsUNet(
-        conv_filters=filters, n_images=len(images), dropout=0
+        conv_filters=filters, n_images=len(images), dropout=0, device=torch.device("cpu")
     )
     seg_net.load_model(os.path.join(d_path, net_name.format('.'.join(images))))
     test_net(
         seg_net, suffix + '_mni',
         patients, d_path=d_path, o_path=o_path, images=images,
         save_pr=save_pr, nii_name=nii_name, im_name=im_name,
-        brain_name=brain_name, verbose=verbose
+        brain_name=brain_name, verbose=verbose, model_path = os.path.join(d_path, net_name.format('.'.join(images))),
     )
     # We will also convert all images back to MNI space.
     if parse_args()['mov_back']:
