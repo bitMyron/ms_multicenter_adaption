@@ -430,7 +430,7 @@ def get_case(
     if task == 'lit':
         brain_name = patient + '_brainmask.nii.gz'
         lesion_name = patient + '_consensus_gt.nii.gz'
-    elif task == 'messg':
+    elif task == 'msseg':
         brain_name = 'Mask_registered.nii.gz'
         lesion_name = 'Consensus.nii.gz'
     patient_path = os.path.join(d_path, patient)
@@ -463,7 +463,7 @@ def get_case(
             ],
             axis=0
         )
-    elif task == 'messg':
+    elif task == 'msseg':
         images = ['FLAIR', 'T1']
         norm_data = np.stack(
             [
