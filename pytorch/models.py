@@ -750,7 +750,7 @@ class LesionsUNet(BaseModel):
         self.eval()
 
         data_tensor = to_torch_var(
-            np.expand_dims(data, axis=0)
+            np.expand_dims(data, axis=0), device=self.device
         )
 
         with torch.no_grad():
