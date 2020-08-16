@@ -301,8 +301,9 @@ def get_isbi_data(
     if verbose > 1:
         print('Loading the lesion masks')
     lesions = list(map(get_mask, lesion_names))
+    brains = [np.full(lesions[0].shape, 1, dtype=int)]*len(lesions)
 
-    return data, lesions, [None]*len(lesions)
+    return data, lesions, brains
 
 def get_messg_data(
         d_path='data/LIT',
