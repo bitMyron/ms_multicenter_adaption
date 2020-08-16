@@ -17,5 +17,5 @@ CUDA_VISIBLE_DEVICES=2,3
 #
 # The weights are defined on the function test_folder (line 654 main.py) and take into account the images.
 # By default it's FLAIR+T1.
-python main.py -d /home/mayang/data/LIT -o /home/mayang/data/output/LIT -t lit --run-test
+python main.py -d /home/mayang/data/LIT -o /home/mayang/data/output/LIT -t lit -m metrics.csv --run-test
 

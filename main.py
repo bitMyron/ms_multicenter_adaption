@@ -21,6 +21,11 @@ from pytorch.utils import get_mask, get_normalised_image
 from pytorch.utils import color_codes, get_dirs, print_message, time_to_string
 from pytorch.models import LesionsUNet
 from pytorch.datasets import LoadLesionCroppingDataset
+from data_manipulation.metrics import (
+    average_surface_distance, tp_fraction_seg, fp_fraction_seg, dsc_seg,
+    tp_fraction_det, fp_fraction_det, dsc_det, true_positive_det, num_regions,
+    num_voxels, probabilistic_dsc_seg, analysis_by_sizes
+)
 
 
 
@@ -71,6 +76,12 @@ def parse_args():
         help='GPU id number.'
     )
     parser.add_argument(
+        '-m', '--metric_file',
+        dest='metric_file',
+        type=str, default=None,
+        help='GPU id number.'
+    )
+    parser.add_argument(
         '--run-train',
         dest='run_train',
         action='store_true', default=False,
@@ -79,6 +90,12 @@ def parse_args():
     parser.add_argument(
         '--run-test',
         dest='run_test',
+        action='store_true', default=False,
+        help='Whether to test a network on the working directory.'
+    )
+    parser.add_argument(
+        '--general-flag',
+        dest='general_flag',
         action='store_true', default=False,
         help='Whether to test a network on the working directory.'
     )
@@ -418,6 +435,7 @@ def get_case(
         lesion_name = 'Consensus.nii.gz'
     patient_path = os.path.join(d_path, patient)
     brain_filename = os.path.join(patient_path, brain_name)
+    lesion_filename = os.path.join(patient_path, lesion_name)
 
     # Similarly to the get_data function, here we need to load just one case
     # (for testing). However, we can't assume that we will have a lesion mask,
@@ -427,6 +445,9 @@ def get_case(
     if verbose > 1:
         print('Loading the brain mask')
     brain = get_mask(brain_filename)
+    gt_nii = load_nii(lesion_filename)
+    lesion = get_mask(lesion_filename)
+    spacing = dict(gt_nii.header.items())['pixdim'][1:4]
 
     # Normalised image
     if verbose > 1:
@@ -464,7 +485,7 @@ def get_case(
             axis=0
         )
 
-    return norm_data, brain
+    return norm_data, brain, lesion, spacing
 
 
 def remove_small_regions(img_vol, min_size=3):
@@ -694,6 +715,11 @@ def test_net(
     if images is None:
         images = ['flair', 't1']
     test_start = time.time()
+    general_flag = parse_args()['general_flag']
+    if parse_args()['metric_file']:
+        metric_file = open(os.path.join(o_path, parse_args()['metric_file']), 'w')
+    else:
+        metric_file = None
 
     # Here we'll do the training / validation split...
     n_samples = len(test_patients)
@@ -727,7 +753,7 @@ def test_net(
 
         # ( Data loading per patient )
         # Load mask, source and target and expand the dimensions.
-        testing, tst_brain = get_case(
+        testing, tst_brain, gt_lesion_mask, spacing = get_case(
             p, d_path, images=images, im_format=im_name,
             brain_name=brain_name, task=task
         )
@@ -816,6 +842,77 @@ def test_net(
                 patient_out_path, 'lesion_mask_{:}.nii.gz'.format(suffix)
             )
         )
+
+        if general_flag:
+            dist = average_surface_distance(gt_lesion_mask, lesion_unet, spacing)
+            tpfv = tp_fraction_seg(gt_lesion_mask, lesion_unet)
+            fpfv = fp_fraction_seg(gt_lesion_mask, lesion_unet)
+            dscv = dsc_seg(gt_lesion_mask, lesion_unet)
+            tpfl = tp_fraction_det(gt_lesion_mask, lesion_unet)
+            fpfl = fp_fraction_det(gt_lesion_mask, lesion_unet)
+            dscl = dsc_det(gt_lesion_mask, lesion_unet)
+            tp = true_positive_det(lesion_unet, gt_lesion_mask)
+            gt_d = num_regions(gt_lesion_mask)
+            lesion_s = num_voxels(lesion_unet)
+            gt_s = num_voxels(gt_lesion_mask)
+            pdsc = probabilistic_dsc_seg(gt_lesion_mask, lesion_unet)
+            if metric_file:
+                metric_file.write(
+                    '%s;%s;%f;%f;%f;%f;%f;%f;%f;%d;%d;%d;%d\n' % (
+                        patient+'gt', patient+'pd',
+                        dist, tpfv, fpfv, dscv,
+                        tpfl, fpfl, dscl,
+                        tp, gt_d, lesion_s, gt_s
+                    )
+                )
+            else:
+                print(
+                    'SurfDist TPFV FPFV DSCV '
+                    'TPFL FPFL DSCL '
+                    'TPL GTL Voxels GTV PrDSC'
+                )
+                print(
+                    '%f %f %f %f %f %f %f %d %d %d %d %f' % (
+                        dist, tpfv, fpfv, dscv,
+                        tpfl, fpfl, dscl,
+                        tp, gt_d, lesion_s, gt_s, pdsc
+                    )
+                )
+        else:
+            sizes = [3, 11, 51]
+            tpf, fpf, dscd, dscs = analysis_by_sizes(gt_lesion_mask, lesion_unet, sizes)
+            names = '%s;%s;' % (patient+'gt', patient+'pd')
+            measures = ';'.join(
+                [
+                    '%f;%f;%f;%f' % (tpf_i, fpf_i, dscd_i, dscs_i)
+                    for tpf_i, fpf_i, dscd_i, dscs_i in zip(
+                    tpf, fpf, dscd, dscs
+                )
+                ]
+            )
+            if metric_file:
+                metric_file.write(names + measures + '\n')
+            else:
+                intervals = [
+                    '\t\t[%d-%d)\t\t|' % (mins, maxs)
+                    for mins, maxs in zip(sizes[:-1], sizes[1:])
+                ]
+                intervals = ''.join(intervals) + \
+                            '\t\t[%d-inf)\t|' % sizes[-1]
+                measures_s = 'TPF\tFPF\tDSCd\tDSCs\t|' * len(sizes)
+                measures = ''.join(
+                    [
+                        '%.2f\t%.2f\t%.2f\t%.2f\t|' % (
+                            tpf_i, fpf_i, dscd_i, dscs_i
+                        )
+                        for tpf_i, fpf_i, dscd_i, dscs_i in zip(
+                        tpf, fpf, dscd, dscs
+                    )
+                    ]
+                )
+                print(intervals)
+                print(measures_s)
+                print(measures)
 
         # Then we'll save the probability maps. They are complementary
         # because we are dealing with a binary problem. But I just like
