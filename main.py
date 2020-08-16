@@ -1094,7 +1094,7 @@ def test_folder(
         seg_net, suffix + '_mni',
         patients, d_path=d_path, o_path=o_path, images=images,
         save_pr=save_pr, nii_name=nii_name, im_name=im_name,
-        brain_name=brain_name, verbose=verbose, model_path = os.path.join(d_path, net_name.format('.'.join(images))),
+        brain_name=brain_name, verbose=verbose
     )
     # We will also convert all images back to MNI space.
     if parse_args()['mov_back']:
