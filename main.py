@@ -833,6 +833,8 @@ def train_full_model(
         filters = [32, 128, 256, 1024]
     if patch_size is None:
         patch_size = (32, 32, 32)
+    if parse_args()['task']:
+        task = parse_args()['task']
     try:
         overlap = tuple([p // 2 for p in patch_size])
     except TypeError:
