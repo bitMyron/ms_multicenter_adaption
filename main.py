@@ -247,6 +247,63 @@ def get_lit_data(
 
     return data, lesions, brains
 
+def get_isbi_data(
+        d_path='data/ISBI',
+        images=None,
+        verbose=1,
+        preload=True,
+):
+    """
+        Function that loads the images and masks of a list of patients.
+        :param d_path: Path to the LSI data.
+        :param images: Image names (prefixes).
+        :param verbose: Level of verbosity
+        :return: list of numpy arrays for the concatenated images, lesion
+        mask and brain mask.
+    """
+
+    lesion_mask_name = 'mask1.nii'
+    tmp = get_dirs(d_path)  # if p_tag in p
+    p_train = sorted(
+        [p for p in tmp],
+        key=lambda p: int(''.join(filter(str.isdigit, p)))
+    )
+    if d_path is None:
+        d_path = parse_args()['dataset_path']
+    if images is None:
+        images = ['flair', 'mprage']
+
+    # Finally we either load all images and normalise them (a lot of RAM) or we
+    # leave that job to the dataset object.
+    if verbose > 1:
+        print('Loading the images')
+    lesion_names = []
+    data = []
+    for p_path in p_train:
+        tmp_stages = set()
+        for file in os.listdir(os.path.join(d_path, p_path, 'preprocessed')):
+            if file.endswith(".nii"):
+                tmp_stages.add(file.split('_')[1])
+        for stage in tmp_stages:
+            lesion_names.append(os.path.join(d_path, p_path, 'masks', '_'.join([p_path, stage, lesion_mask_name])))
+            data.append(np.stack(
+                        [
+                            get_normalised_image(
+                                os.path.join(d_path, p_path, 'preprocessed', '%s_%s_%s_pp.nii' % (p_path, stage, im)),
+                                None,
+                            ) for im in images
+                        ],
+                        axis=0
+                    ))
+
+    # Lesion masks (we are using this function for training, so there should
+    # always be a lesion mask).
+    if verbose > 1:
+        print('Loading the lesion masks')
+    lesions = list(map(get_mask, lesion_names))
+
+    return data, lesions, [None]*len(lesions)
+
 def get_messg_data(
         d_path='data/LIT',
         images=None,
@@ -523,6 +580,9 @@ def train_net(
         elif task == 'msseg':
             # MSSEG2016 data loading
             tr_data, tr_lesions, tr_brains = get_messg_data(d_path=d_path)
+        elif task == 'isbi':
+            # ISBI data loading
+            tr_data, tr_lesions, tr_brains = get_isbi_data(d_path=d_path)
         else:
             # default data loader
             tr_data, tr_lesions, tr_brains = get_data(d_path=d_path)
