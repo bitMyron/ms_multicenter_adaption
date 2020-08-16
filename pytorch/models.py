@@ -754,10 +754,13 @@ class LesionsUNet(BaseModel):
         )
 
         with torch.no_grad():
-            torch.cuda.synchronize(self.device)
-            seg = self(data_tensor)
-            torch.cuda.synchronize(self.device)
-            torch.cuda.empty_cache()
+            if self.device == torch.device('cpu'):
+                seg = self(data_tensor)
+            else:
+                torch.cuda.synchronize(self.device)
+                seg = self(data_tensor)
+                torch.cuda.synchronize(self.device)
+                torch.cuda.empty_cache()
 
         if verbose > 1:
             print(
