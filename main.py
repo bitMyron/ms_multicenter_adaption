@@ -65,6 +65,12 @@ def parse_args():
         help='GPU id number.'
     )
     parser.add_argument(
+        '-t', '--task',
+        dest='task',
+        type=str, default='lit',
+        help='GPU id number.'
+    )
+    parser.add_argument(
         '--run-train',
         dest='run_train',
         action='store_true', default=False,
@@ -256,8 +262,8 @@ def get_messg_data(
         mask and brain mask.
     """
 
-    brain_mask_name = 'brainmask.nii.gz'
-    lesion_mask_name = 'consensus_gt.nii.gz'
+    brain_mask_name = 'Mask_registered.nii.gz'
+    lesion_mask_name = 'Consensus.nii.gz'
     tmp = get_dirs(d_path)  # if p_tag in p
     p_train = sorted(
         [p for p in tmp],
@@ -275,7 +281,7 @@ def get_messg_data(
     if d_path is None:
         d_path = parse_args()['dataset_path']
     if images is None:
-        images = ['flair', 't1w']
+        images = ['flair', 't1']
     images = [tmp.upper() for tmp in images]
 
     # Brain masks (either a real mask, or an image masked)
@@ -299,7 +305,7 @@ def get_messg_data(
             np.stack(
                 [
                     get_normalised_image(
-                        os.path.join(d_path, p, '%s_%s.nii.gz' % (p, im)),
+                        os.path.join(d_path, p, '%s_preprocessed.nii.gz' % im),
                         mask_i,
                     ) for im in images
                 ],
@@ -309,7 +315,7 @@ def get_messg_data(
     else:
         data = [
             [
-                os.path.join(d_path, p, '%s_%s.nii.gz' % (p, im))
+                os.path.join(d_path, p, '%s_preprocessed.nii.gz' % im)
                 for im in images
             ] for p, mask_i in zip(p_train, brains)
         ]
@@ -324,6 +330,7 @@ def get_case(
         im_format=None,
         brain_name=None,
         verbose=1,
+        task=None
 ):
     """
         Function that loads the images and masks of a patient.
@@ -344,6 +351,13 @@ def get_case(
         im_format = '{:}_brain_mni.nii.gz'
     if brain_name is None:
         brain_name = 'flair_brain_mni.nii.gz'
+
+    if task == 'lit':
+        brain_name = patient + '_brainmask.nii.gz'
+        lesion_name = patient + '_consensus_gt.nii.gz'
+    elif task == 'messg':
+        brain_name = 'Mask_registered.nii.gz'
+        lesion_name = 'Consensus.nii.gz'
     patient_path = os.path.join(d_path, patient)
     brain_filename = os.path.join(patient_path, brain_name)
 
@@ -359,15 +373,38 @@ def get_case(
     # Normalised image
     if verbose > 1:
         print('Loading the images')
-    norm_data = np.stack(
-        [
-            get_normalised_image(
-                os.path.join(patient_path, im_format.format(im)),
-                brain,
-            ) for im in images
-        ],
-        axis=0
-    )
+    if task == 'lit':
+        images = ['FLAIR', 'T1W']
+        norm_data = np.stack(
+            [
+                get_normalised_image(
+                    os.path.join(patient_path, '%s_%s.nii.gz' % (patient, im)),
+                    brain,
+                ) for im in images
+            ],
+            axis=0
+        )
+    elif task == 'messg':
+        images = ['FLAIR', 'T1']
+        norm_data = np.stack(
+            [
+                get_normalised_image(
+                    os.path.join(patient_path, '%s_preprocessed.nii.gz' % im),
+                    brain,
+                ) for im in images
+            ],
+            axis=0
+        )
+    else:
+        norm_data = np.stack(
+            [
+                get_normalised_image(
+                    os.path.join(patient_path, im_format.format(im)),
+                    brain,
+                ) for im in images
+            ],
+            axis=0
+        )
 
     return norm_data, brain
 
@@ -557,7 +594,7 @@ def train_net(
 def test_net(
         net, suffix, test_patients, d_path=None, o_path=None, images=None,
         save_pr=True, nii_name='flair_mni.nii.gz', im_name=None,
-        brain_name=None, verbose=0
+        brain_name=None, verbose=0, task=None
 ):
     """
     Function that tests a fully trained network with a set of testing images.
@@ -582,6 +619,8 @@ def test_net(
         d_path = parse_args()['dataset_path']
     if o_path is None:
         o_path = parse_args()['output_path']
+    if task is None:
+        task = parse_args()['task']
     if images is None:
         images = ['flair', 't1']
     test_start = time.time()
@@ -615,7 +654,7 @@ def test_net(
         # Load mask, source and target and expand the dimensions.
         testing, tst_brain = get_case(
             p, d_path, images=images, im_format=im_name,
-            brain_name=brain_name
+            brain_name=brain_name, task=task
         )
 
         # Brain mask and bounding box
@@ -633,7 +672,10 @@ def test_net(
 
         # Baseline image (testing)
         # We will us the NIFTI header for the results.
-        nii = load_nii(os.path.join(patient_path, nii_name))
+        if task == 'lit':
+            nii = load_nii(os.path.join(patient_path, '%flair_corrected.nii.gz'))
+        else:
+            nii = load_nii(os.path.join(patient_path, nii_name))
 
         # Here is where we crop the image to the bounding box.
         testing = testing[(slice(None),) + bb]
@@ -821,7 +863,7 @@ def test_folder(
         d_path=None, o_path=None, net_name='lesions-unet.{:}_model.pt',
         test_list=None, suffix='unet3d', images=None, filters=None,
         save_pr=False, nii_name='flair_brain_mni.nii.gz', im_name=None,
-        brain_name=None, verbose=0
+        brain_name=None, verbose=0, task=None
 ):
     """
     Function to test a pretrained model with an unseen dataset.
@@ -851,6 +893,8 @@ def test_folder(
         images = ['flair', 't1']
     if filters is None:
         filters = [32, 128, 256, 1024]
+    if task is None:
+        task = parse_args()['task']
     if test_list is None:
         patients = sorted(
             get_dirs(d_path), key=lambda p: int(''.join(filter(str.isdigit, p)))
@@ -866,7 +910,7 @@ def test_folder(
     seg_net = LesionsUNet(
         conv_filters=filters, n_images=len(images), dropout=0
     )
-    seg_net.load_model(net_name.format('.'.join(images)))
+    # seg_net.load_model(net_name.format('.'.join(images)))
     test_net(
         seg_net, suffix + '_mni',
         patients, d_path=d_path, o_path=o_path, images=images,
