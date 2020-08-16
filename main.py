@@ -910,7 +910,7 @@ def test_folder(
     seg_net = LesionsUNet(
         conv_filters=filters, n_images=len(images), dropout=0
     )
-    seg_net.load_model(net_name.format('.'.join(images)))
+    seg_net.load_model(os.path.join(d_path,net_name.format('.'.join(images))))
     test_net(
         seg_net, suffix + '_mni',
         patients, d_path=d_path, o_path=o_path, images=images,
