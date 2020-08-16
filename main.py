@@ -775,6 +775,8 @@ def test_net(
         # We will us the NIFTI header for the results.
         if task == 'lit':
             nii = load_nii(os.path.join(patient_path, 'flair_corrected.nii.gz'))
+        elif task == 'msseg':
+            nii = load_nii(os.path.join(patient_path, 'FLAIR_preprocessed.nii.gz'))
         else:
             nii = load_nii(os.path.join(patient_path, nii_name))
 
