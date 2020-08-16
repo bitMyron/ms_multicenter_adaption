@@ -481,7 +481,7 @@ def remove_boundary_regions(img_vol, mask_vol, boundary=2):
 
 def train_net(
         net, model_name, p_train, patch_size, overlap, images=None,
-        batch_size=16, d_path=None, verbose=0
+        batch_size=16, d_path=None, verbose=0, train_val_split=0.2, task=None
 ):
     """
     Function to train a network with a set of training images.
@@ -493,6 +493,8 @@ def train_net(
     :param p_train: Images for training.
     :param d_path: Path to the images.
     :param verbose: Level of verbosity.
+    :param train_val_split: Ratio for training and validation set split.
+    :param task: Training task name.
     :return: None
     """
     # Init
@@ -515,15 +517,22 @@ def train_net(
         #     p_train, d_path, images=images, preload=False, verbose=verbose
         # )
 
-        # LIT data loding
-        tr_data, tr_lesions, tr_brains = get_lit_data(d_path=d_path)
+        if task == 'lit':
+            # LIT data loading
+            tr_data, tr_lesions, tr_brains = get_lit_data(d_path=d_path)
+        elif task == 'msseg':
+            # MSSEG2016 data loading
+            tr_data, tr_lesions, tr_brains = get_messg_data(d_path=d_path)
+        else:
+            # default data loader
+            tr_data, tr_lesions, tr_brains = get_data(d_path=d_path)
 
         # Datasets / Dataloaders should be added here
         if verbose > 1:
             print('Preparing the training datasets / dataloaders')
         # What follows are hard coded parameters. They could (and probably
         # should) be defined as function / command line parameters.
-        val_split = 0.1
+        val_split = train_val_split
         num_workers = 4
         # Here we'll do the training / validation split...
         n_samples = len(tr_data)
@@ -594,7 +603,7 @@ def train_net(
 def test_net(
         net, suffix, test_patients, d_path=None, o_path=None, images=None,
         save_pr=True, nii_name='flair_mni.nii.gz', im_name=None,
-        brain_name=None, verbose=0, task=None
+        brain_name=None, verbose=0, task=None, train_val_split=0.2, portion = 0
 ):
     """
     Function that tests a fully trained network with a set of testing images.
@@ -624,6 +633,11 @@ def test_net(
     if images is None:
         images = ['flair', 't1']
     test_start = time.time()
+
+    # Here we'll do the training / validation split...
+    n_samples = len(test_patients)
+    n_t_samples = int(n_samples * (1 - train_val_split))
+    test_patients = test_patients[n_t_samples:]
 
     # Since we are using the network on whole images (not patches if
     # avoidable), we will test image by image. This is extremely fast, so
@@ -788,6 +802,7 @@ def train_full_model(
         batch_size=32,
         dropout=.0,
         verbose=1,
+        task='lit'
 ):
     """
     Function to train a model with all the patients of a folder, or the ones
@@ -805,6 +820,7 @@ def train_full_model(
      patch size (memory consumption).
     :param dropout: Dropout value.
     :param verbose: Verbosity level.
+    :param task: Task name for model training.
     """
     c = color_codes()
 
@@ -855,7 +871,7 @@ def train_full_model(
     )
     train_net(
         seg_net, model_name, p_train, patch_size, overlap, images=images,
-        batch_size=batch_size, d_path=d_path, verbose=verbose
+        batch_size=batch_size, d_path=d_path, verbose=verbose, task=task
     )
 
 
@@ -863,7 +879,7 @@ def test_folder(
         d_path=None, o_path=None, net_name='lesions-unet.{:}_model.pt',
         test_list=None, suffix='unet3d', images=None, filters=None,
         save_pr=False, nii_name='flair_brain_mni.nii.gz', im_name=None,
-        brain_name=None, verbose=0, task=None
+        brain_name=None, verbose=0, task=None, train_val_split=0.2
 ):
     """
     Function to test a pretrained model with an unseen dataset.
@@ -910,7 +926,7 @@ def test_folder(
     seg_net = LesionsUNet(
         conv_filters=filters, n_images=len(images), dropout=0
     )
-    seg_net.load_model(os.path.join(d_path,net_name.format('.'.join(images))))
+    # seg_net.load_model(os.path.join(d_path, net_name.format('.'.join(images))))
     test_net(
         seg_net, suffix + '_mni',
         patients, d_path=d_path, o_path=o_path, images=images,
@@ -1019,10 +1035,10 @@ def main():
         train_full_model(verbose=1)
     if parse_args()['run_test']:
         test_folder(verbose=1)
-        test_folder(
-            net_name='lesions.full-unet.{:}_model.pt', suffix='unet3d.full',
-            verbose=1
-        )
+        # test_folder(
+        #     net_name='lesions.full-unet.{:}_model.pt', suffix='unet3d.full',
+        #     verbose=1
+        # )
 
 
 if __name__ == "__main__":
