@@ -177,7 +177,7 @@ def cross_train_test(
                 )
             )
 
-            get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx])
+            get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
 
         seg_net.save_model(os.path.join(cv_path, model_name))
 

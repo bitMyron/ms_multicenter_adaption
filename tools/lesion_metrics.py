@@ -4,7 +4,7 @@ from data_manipulation.metrics import (
     num_voxels, probabilistic_dsc_seg, analysis_by_sizes
 )
 
-def get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, patient, general_flag=True):
+def get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, patient, general_flag=True, fold=1):
     if general_flag:
         dist = average_surface_distance(gt_lesion_mask, lesion_unet, spacing)
         tpfv = tp_fraction_seg(gt_lesion_mask, lesion_unet)
@@ -20,8 +20,8 @@ def get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, patien
         pdsc = probabilistic_dsc_seg(gt_lesion_mask, lesion_unet)
         if metric_file:
             metric_file.write(
-                '%s;%s;%f;%f;%f;%f;%f;%f;%f;%d;%d;%d;%d\n' % (
-                    patient + 'gt', patient + 'pd',
+                '%s;%s;%s;%f;%f;%f;%f;%f;%f;%f;%d;%d;%d;%d\n' % (
+                    patient + 'gt', patient + 'pd', str(fold),
                     dist, tpfv, fpfv, dscv,
                     tpfl, fpfl, dscl,
                     tp, gt_d, lesion_s, gt_s
