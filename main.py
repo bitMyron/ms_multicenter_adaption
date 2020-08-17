@@ -1087,7 +1087,7 @@ def test_folder(
     # We just have to test the network and save
     # the results.
     seg_net = LesionsUNet(
-        conv_filters=filters, n_images=len(images), dropout=0, device=torch.device("cpu")
+        conv_filters=filters, n_images=len(images), dropout=0
     )
     seg_net.load_model(os.path.join(d_path, net_name.format('.'.join(images))))
     test_net(
