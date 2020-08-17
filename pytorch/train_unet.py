@@ -73,7 +73,7 @@ def cross_train_test(
     spacing = dict(example_nii.header.items())['pixdim'][1:4]
 
     # Cross train and test
-    for i in range(cv_indexs):
+    for i in range(len(cv_indexs)):
 
         # Save each cv model and test results indexed
         cv_path = os.path.join(o_path, str(i))
