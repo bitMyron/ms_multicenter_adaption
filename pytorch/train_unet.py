@@ -80,18 +80,18 @@ def cross_train_test(
         if not os.path.isdir(cv_path):
             os.mkdir(cv_path)
 
-        d_train = tr_data[cv_indexs['train_index']]
-        l_train = tr_lesions[cv_indexs['train_index']]
-        m_train = tr_brains[cv_indexs['train_index']]
+        d_train = tr_data[cv_indexs[i]['train_index']]
+        l_train = tr_lesions[cv_indexs[i]['train_index']]
+        m_train = tr_brains[cv_indexs[i]['train_index']]
 
-        d_val = tr_data[cv_indexs['val_index']]
-        l_val = tr_lesions[cv_indexs['val_index']]
-        m_val = tr_brains[cv_indexs['val_index']]
+        d_val = tr_data[cv_indexs[i]['val_index']]
+        l_val = tr_lesions[cv_indexs[i]['val_index']]
+        m_val = tr_brains[cv_indexs[i]['val_index']]
 
-        d_test = tr_data[cv_indexs['test_index']]
-        l_test = tr_lesions[cv_indexs['test_index']]
-        m_test = tr_brains[cv_indexs['test_index']]
-        p_test = p_trains[cv_indexs['test_index']]
+        d_test = tr_data[cv_indexs[i]['test_index']]
+        l_test = tr_lesions[cv_indexs[i]['test_index']]
+        m_test = tr_brains[cv_indexs[i]['test_index']]
+        p_test = p_trains[cv_indexs[i]['test_index']]
 
         # Initialize unet model
         seg_net = LesionsUNet(
