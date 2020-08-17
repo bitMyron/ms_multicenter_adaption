@@ -62,7 +62,7 @@ def parse_args():
     parser.add_argument(
         '-m', '--metric_file',
         dest='metric_file',
-        type=str, default=None,
+        type=str, default='metrics.csv',
         help='GPU id number.'
     )
     parser.add_argument(
