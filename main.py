@@ -42,6 +42,12 @@ def parse_args():
         help='Patience for early stopping.'
     )
     parser.add_argument(
+        '--dropout',
+        dest='dropout',
+        type=float, default=0.5,
+        help='Patience for early stopping.'
+    )
+    parser.add_argument(
         '-g', '--gpu',
         dest='gpu_id',
         type=int, default=0,

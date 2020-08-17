@@ -21,14 +21,12 @@ from tools.lesion_metrics import get_lesion_metrics
 
 def cross_train_test(
         args, patch_size=(32, 32, 32), images=None, filters=None,
-        batch_size=16, d_path=None, verbose=0, n_fold=5, task=None
+        batch_size=16,verbose=0, n_fold=5, task=None
 ):
     # Init
     c = color_codes()
-    if args['dropout']:
-        dropout = args['dropout']
-    if d_path is None:
-        d_path = args['dataset_path']
+    dropout = args.get('dropout', 0.5)
+    d_path = args.get('dataset_path', None)
     if images is None:
         images = ['flair', 't1']
     if filters is None:
