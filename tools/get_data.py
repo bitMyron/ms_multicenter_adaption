@@ -384,7 +384,7 @@ def cross_validation_split(set_size, n_fold=5, val_test_ratio=1. / 3.):
         :return: list of numpy arrays for the concatenated images, lesion
         mask and brain mask.
     """
-    whole_indexs = range(set_size)
+    whole_indexs = list(range(set_size))
     random.shuffle(whole_indexs)
     val_test_len = int(set_size / n_fold)
     val_len = max(1, int(set_size * val_test_ratio / n_fold))
