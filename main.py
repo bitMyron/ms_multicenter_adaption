@@ -5,7 +5,7 @@ The main file running inside the docker (the starting point)
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2,3])
 import argparse
-from pytorch.train_unet import test_folder, train_full_model
+from pytorch.train_unet import test_folder, train_full_model, cross_train_test
 
 def parse_args():
     """
@@ -72,6 +72,12 @@ def parse_args():
         help='Whether to test a network on the working directory.'
     )
     parser.add_argument(
+        '--run_cross_train',
+        dest='run_cross_train',
+        action='store_true', default=False,
+        help='Whether to test a network on the working directory.'
+    )
+    parser.add_argument(
         '--general-flag',
         dest='general_flag',
         action='store_true', default=False,
@@ -101,6 +107,8 @@ def main():
         #     net_name='lesions.full-unet.{:}_model.pt', suffix='unet3d.full',
         #     verbose=1
         # )
+    if args['run_cross_train']:
+        cross_train_test(args, verbose=1)
 
 
 if __name__ == "__main__":

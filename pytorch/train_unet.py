@@ -11,17 +11,185 @@ from time import strftime
 from pytorch.utils import color_codes, get_dirs, print_message, time_to_string
 from pytorch.models import LesionsUNet
 from pytorch.datasets import LoadLesionCroppingDataset
-from data_manipulation.metrics import (
-    average_surface_distance, tp_fraction_seg, fp_fraction_seg, dsc_seg,
-    tp_fraction_det, fp_fraction_det, dsc_det, true_positive_det, num_regions,
-    num_voxels, probabilistic_dsc_seg, analysis_by_sizes
-)
 from tools.get_data import (
-    get_data, get_isbi_data, get_lit_data, get_messg_data, get_case
+    get_data, get_isbi_data, get_lit_data, get_messg_data, get_case, cross_validation_split
 )
 from tools.lesion_manipulation import (
     remove_small_regions
 )
+from tools.lesion_metrics import get_lesion_metrics
+
+def cross_train_test(
+        args, patch_size, overlap, images=None, filters=None,
+        batch_size=16, d_path=None, verbose=0, n_fold=5, task=None
+):
+    # Init
+    c = color_codes()
+    if args['dropout']:
+        dropout = args['dropout']
+    if d_path is None:
+        d_path = args['dataset_path']
+    if images is None:
+        images = ['flair', 't1']
+    if filters is None:
+        filters = [32, 128, 256, 1024]
+    if patch_size is None:
+        patch_size = (32, 32, 32)
+    if args['task']:
+        task = args['task']
+    if d_path is None:
+        d_path = args['dataset_path']
+    o_path = args['output_path']
+    if args['metric_file']:
+        metric_file = open(os.path.join(o_path, args['metric_file']), 'w')
+    else:
+        metric_file = None
+    epochs = args['epochs']
+    patience = args['patience']
+    num_workers = 4
+    model_name = 'lesions-unet.{:}_model.pt'.format('.'.join(images))
+    suffix = 'unet3d'
+    training_start = time.time()
+
+    if task == 'lit':
+        # LIT data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_lit_data(d_path=d_path)
+    elif task == 'msseg':
+        # MSSEG2016 data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_messg_data(d_path=d_path)
+    elif task == 'isbi':
+        # ISBI data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_isbi_data(d_path=d_path)
+    else:
+        # LIT data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_lit_data(d_path=d_path)
+
+    # Get amount of training samples
+    cv_indexs = cross_validation_split(len(tr_lesions), n_fold=n_fold)
+    spacing = dict(example_nii.header.items())['pixdim'][1:4]
+
+    # Cross train and test
+    for i in range(cv_indexs):
+
+        # Save each cv model and test results indexed
+        cv_path = os.path.join(o_path, str(i))
+        if not os.path.isdir(cv_path):
+            os.mkdir(cv_path)
+
+        d_train = tr_data[cv_indexs['train_index']]
+        l_train = tr_lesions[cv_indexs['train_index']]
+        m_train = tr_brains[cv_indexs['train_index']]
+
+        d_val = tr_data[cv_indexs['val_index']]
+        l_val = tr_lesions[cv_indexs['val_index']]
+        m_val = tr_brains[cv_indexs['val_index']]
+
+        d_test = tr_data[cv_indexs['test_index']]
+        l_test = tr_lesions[cv_indexs['test_index']]
+        m_test = tr_brains[cv_indexs['test_index']]
+        p_test = p_trains[cv_indexs['test_index']]
+
+        # Initialize unet model
+        seg_net = LesionsUNet(
+            conv_filters=filters, n_images=len(images), dropout=dropout
+        )
+
+        # Prepare train/val dataloader
+        train_dataset = LoadLesionCroppingDataset(
+            d_train, l_train, m_train, patch_size, overlap,
+            verbose=verbose
+        )
+        train_dataloader = DataLoader(
+            train_dataset, batch_size, True, num_workers=num_workers
+        )
+        val_dataset = LoadLesionCroppingDataset(
+            d_val, l_val, m_val, patch_size=patch_size,
+            verbose=verbose
+        )
+        val_dataloader = DataLoader(
+            val_dataset, batch_size, num_workers=num_workers
+        )
+
+        if verbose > 0:
+            n_params = sum(
+                p.numel() for p in seg_net.parameters() if p.requires_grad
+            )
+            print(
+                '%sStarting training with a unet%s (%s%d%s parameters)' %
+                (c['c'], c['nc'], c['b'], n_params, c['nc'])
+            )
+
+        # And all that's left is to train and save the model.
+        seg_net.fit(
+            train_dataloader,
+            val_dataloader,
+            epochs=epochs,
+            patience=patience,
+            verbose=verbose
+        )
+
+        for test_case_idx in range(len(p_test)):
+            test_brain = d_test[test_case_idx]
+            gt_lesion_mask = l_test[test_case_idx]
+            test_start = time.time()
+            try:
+                seg = seg_net.lesions(
+                    test_brain, verbose=verbose
+                )
+            except RuntimeError:
+                if verbose > 0:
+                    test_elapsed = time.time() - test_start
+                    test_eta = len(p_test) * test_elapsed / (test_case_idx + 1)
+                    print(
+                        '\033[K{:}CUDA RAM error - '
+                        '{:}Testing again with patches patient {:>13} '
+                        '{:}({:4d}/{:4d} - {:5.2f}%){:} {:}'
+                        ' ETA: {:} {:}'.format(
+                            c['r'], c['g'], p_test[test_case_idx], c['c'],
+                            test_case_idx + 1, len(p_test), 100 * (test_case_idx + 1) / len(p_test),
+                            c['g'],
+                            time_to_string(test_elapsed),
+                            time_to_string(test_eta),
+                            c['nc']
+                        ),
+                        end='\r'
+                    )
+                seg = seg_net.patch_lesions(
+                    test_brain, patch_size=patch_size[0],
+                    verbose=verbose
+                )
+
+            seg_bin = np.argmax(seg, axis=0).astype(np.bool)
+            lesion_unet = remove_small_regions(seg_bin)
+
+            mask_nii = nib.Nifti1Image(
+                lesion_unet,
+                example_nii.get_qform(),
+                example_nii.get_header()
+            )
+            mask_nii.to_filename(
+                os.path.join(
+                    cv_path, 'lesion_mask_{:}.nii.gz'.format(suffix)
+                )
+            )
+
+            get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx])
+
+        seg_net.save_model(os.path.join(cv_path, model_name))
+
+
+        if verbose > 0:
+            time_str = time.strftime(
+                '%H hours %M minutes %S seconds',
+                time.gmtime(time.time() - training_start)
+            )
+            print(
+                '%sTraining finished%s (total time %s)\n' %
+                (c['r'], c['nc'], time_str)
+            )
+
+    metric_file.close()
+
 
 def train_net(
         args, net, model_name, p_train, patch_size, overlap, images=None,
@@ -312,76 +480,7 @@ def test_net(
             )
         )
 
-        if general_flag:
-            dist = average_surface_distance(gt_lesion_mask, lesion_unet, spacing)
-            tpfv = tp_fraction_seg(gt_lesion_mask, lesion_unet)
-            fpfv = fp_fraction_seg(gt_lesion_mask, lesion_unet)
-            dscv = dsc_seg(gt_lesion_mask, lesion_unet)
-            tpfl = tp_fraction_det(gt_lesion_mask, lesion_unet)
-            fpfl = fp_fraction_det(gt_lesion_mask, lesion_unet)
-            dscl = dsc_det(gt_lesion_mask, lesion_unet)
-            tp = true_positive_det(lesion_unet, gt_lesion_mask)
-            gt_d = num_regions(gt_lesion_mask)
-            lesion_s = num_voxels(lesion_unet)
-            gt_s = num_voxels(gt_lesion_mask)
-            pdsc = probabilistic_dsc_seg(gt_lesion_mask, lesion_unet)
-            if metric_file:
-                metric_file.write(
-                    '%s;%s;%f;%f;%f;%f;%f;%f;%f;%d;%d;%d;%d\n' % (
-                        patient+'gt', patient+'pd',
-                        dist, tpfv, fpfv, dscv,
-                        tpfl, fpfl, dscl,
-                        tp, gt_d, lesion_s, gt_s
-                    )
-                )
-            else:
-                print(
-                    'SurfDist TPFV FPFV DSCV '
-                    'TPFL FPFL DSCL '
-                    'TPL GTL Voxels GTV PrDSC'
-                )
-                print(
-                    '%f %f %f %f %f %f %f %d %d %d %d %f' % (
-                        dist, tpfv, fpfv, dscv,
-                        tpfl, fpfl, dscl,
-                        tp, gt_d, lesion_s, gt_s, pdsc
-                    )
-                )
-        else:
-            sizes = [3, 11, 51]
-            tpf, fpf, dscd, dscs = analysis_by_sizes(gt_lesion_mask, lesion_unet, sizes)
-            names = '%s;%s;' % (patient+'gt', patient+'pd')
-            measures = ';'.join(
-                [
-                    '%f;%f;%f;%f' % (tpf_i, fpf_i, dscd_i, dscs_i)
-                    for tpf_i, fpf_i, dscd_i, dscs_i in zip(
-                    tpf, fpf, dscd, dscs
-                )
-                ]
-            )
-            if metric_file:
-                metric_file.write(names + measures + '\n')
-            else:
-                intervals = [
-                    '\t\t[%d-%d)\t\t|' % (mins, maxs)
-                    for mins, maxs in zip(sizes[:-1], sizes[1:])
-                ]
-                intervals = ''.join(intervals) + \
-                            '\t\t[%d-inf)\t|' % sizes[-1]
-                measures_s = 'TPF\tFPF\tDSCd\tDSCs\t|' * len(sizes)
-                measures = ''.join(
-                    [
-                        '%.2f\t%.2f\t%.2f\t%.2f\t|' % (
-                            tpf_i, fpf_i, dscd_i, dscs_i
-                        )
-                        for tpf_i, fpf_i, dscd_i, dscs_i in zip(
-                        tpf, fpf, dscd, dscs
-                    )
-                    ]
-                )
-                print(intervals)
-                print(measures_s)
-                print(measures)
+        get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, patient, general_flag)
 
         # Then we'll save the probability maps. They are complementary
         # because we are dealing with a binary problem. But I just like
@@ -417,6 +516,8 @@ def test_net(
 
     if verbose > 0:
         print(' ' * 100, end='\r')
+    if metric_file:
+        metric_file.close()
 
 
 def train_full_model(

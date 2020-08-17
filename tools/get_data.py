@@ -1,26 +1,9 @@
 import os
 import numpy as np
-import argparse
-import time
-import torch
-from subprocess import check_call
-from functools import reduce
-from scipy import ndimage as nd
-from scipy.ndimage.morphology import binary_erosion as imerode
 from nibabel import load as load_nii
-import nibabel as nib
-from torch.utils.data import DataLoader
-from skimage.measure import label as bwlabeln
-from time import strftime
 from pytorch.utils import get_mask, get_normalised_image
 from pytorch.utils import color_codes, get_dirs, print_message, time_to_string
-from pytorch.models import LesionsUNet
-from pytorch.datasets import LoadLesionCroppingDataset
-from data_manipulation.metrics import (
-    average_surface_distance, tp_fraction_seg, fp_fraction_seg, dsc_seg,
-    tp_fraction_det, fp_fraction_det, dsc_det, true_positive_det, num_regions,
-    num_voxels, probabilistic_dsc_seg, analysis_by_sizes
-)
+import random
 
 
 def get_data(
@@ -166,8 +149,9 @@ def get_lit_data(
                 for im in images
             ] for p, mask_i in zip(p_train, brains)
         ]
+    example_nii = load_nii(os.path.join(d_path, p_train[0], '%s_%s.nii.gz' % (p_train[0], images[0])))
+    return data, lesions, brains, p_train, example_nii
 
-    return data, lesions, brains
 
 def get_isbi_data(
         d_path='data/ISBI',
@@ -193,6 +177,8 @@ def get_isbi_data(
     if images is None:
         images = ['flair', 'mprage']
 
+    p_trains = []
+
     # Finally we either load all images and normalise them (a lot of RAM) or we
     # leave that job to the dataset object.
     if verbose > 1:
@@ -207,23 +193,25 @@ def get_isbi_data(
         for stage in tmp_stages:
             lesion_names.append(os.path.join(d_path, p_path, 'masks', '_'.join([p_path, stage, lesion_mask_name])))
             data.append(np.stack(
-                        [
-                            get_normalised_image(
-                                os.path.join(d_path, p_path, 'preprocessed', '%s_%s_%s_pp.nii' % (p_path, stage, im)),
-                                None,
-                            ) for im in images
-                        ],
-                        axis=0
-                    ))
+                [
+                    get_normalised_image(
+                        os.path.join(d_path, p_path, 'preprocessed', '%s_%s_%s_pp.nii' % (p_path, stage, im)),
+                        None,
+                    ) for im in images
+                ],
+                axis=0
+            ))
+            p_trains.append(p_path + '_' + stage)
 
     # Lesion masks (we are using this function for training, so there should
     # always be a lesion mask).
     if verbose > 1:
         print('Loading the lesion masks')
     lesions = list(map(get_mask, lesion_names))
-    brains = [np.full(lesions[0].shape, 1, dtype=int)]*len(lesions)
+    brains = [np.full(lesions[0].shape, 1, dtype=int)] * len(lesions)
+    example_nii = load_nii(os.path.join(d_path, p_path, 'preprocessed', '%s_%s_%s_pp.nii' % (p_path, stage, images[0])))
+    return data, lesions, brains, p_train, example_nii
 
-    return data, lesions, brains
 
 def get_messg_data(
         d_path='data/LIT',
@@ -294,8 +282,8 @@ def get_messg_data(
                 for im in images
             ] for p, mask_i in zip(p_train, brains)
         ]
-
-    return data, lesions, brains
+    example_nii = load_nii(os.path.join(d_path, p_train[0], '%s_preprocessed.nii.gz' % images[0]))
+    return data, lesions, brains, p_train, example_nii
 
 
 def get_case(
@@ -384,3 +372,31 @@ def get_case(
         )
 
     return norm_data, brain, lesion, spacing
+
+
+def cross_validation_split(set_size, n_fold=5, val_test_ratio=1. / 3.):
+    """
+        Function that generate train/val/test indexes for the cross-validation.
+        :param set_size: size of the dataset
+        :param train_ratio: ratio of the training set
+        :param val_ratio: ratio of the validation set (The rest is assigned to the test set)
+        :param nfold: amount of folds
+        :return: list of numpy arrays for the concatenated images, lesion
+        mask and brain mask.
+    """
+    whole_indexs = range(set_size)
+    random.shuffle(whole_indexs)
+    val_test_len = int(set_size / n_fold)
+    val_len = max(1, int(set_size * val_test_ratio / n_fold))
+    result = []
+
+    for fold in range(n_fold - 1, -1, -1):
+        tmp = {}
+        val_start_index = int(set_size * fold / n_fold)
+        val_end_index = int(set_size * fold / n_fold) + val_test_len
+        tmp['val_index'] = whole_indexs[val_start_index:val_start_index + val_len]
+        tmp['test_index'] = whole_indexs[val_start_index + val_len:min(val_start_index + val_end_index, set_size)]
+        tmp['train_index'] = whole_indexs[0:val_start_index] + whole_indexs[
+                                                               min(val_start_index + val_end_index, set_size):]
+        result.append(tmp)
+    return result
