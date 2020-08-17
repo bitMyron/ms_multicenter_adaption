@@ -164,7 +164,8 @@ def cross_train_test(
                 )
 
             seg_bin = np.argmax(seg, axis=0).astype(np.bool)
-            lesion_unet = remove_small_regions(seg_bin)
+            # lesion_unet = remove_small_regions(seg_bin)
+            lesion_unet = seg_bin
 
             mask_nii = nib.Nifti1Image(
                 lesion_unet,
