@@ -30,7 +30,8 @@ def cross_train_test(
     if images is None:
         images = ['flair', 't1']
     if filters is None:
-        filters = [32, 128, 256, 1024]
+        # filters = [32, 128, 256, 1024]
+        filters = [32, 32, 64, 128, 256]
     if patch_size is None:
         patch_size = (32, 32, 32)
     try:
