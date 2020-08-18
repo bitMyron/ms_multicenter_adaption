@@ -1,0 +1,38 @@
+================================================================================================================
+* Training
+1. Sasha dataset preprocessing:
+	- create pseudo 3D slices (3 slices) as inputs.
+	- save pseudo 3d slices as ".png" files.
+2. Dataset folder structure
+	Level 0 : xxx/SashaDataset
+	Level 1 : training or testing
+	Level 2 : ScanIndex (1011pb_m00, 1017sm_m48, ...)
+	Level 3 : t1 or flair or les_bin (les_bin is the ground truth)
+	Level 4 : sliceId.png (1.png, 2.png, ...) 
+3. Set dataset_root parameter in train.py 
+	DATASET_ROOT = 'xxx/SashaDataset'
+4. run "python train.py" to start training
+5. best_model would be saved under "ExpResults" folder
+
+================================================================================================================
+* Inference
+6. copy "sasha_dataset_setting" from previous code package to the root folder 
+7. copy "best_model.pkl" from "ExpResults" folder to the root folder, and run "python inference.py"
+   predicted_lesion_masks will be generated as "output_sample"
+8. run "python inference_eval.py"
+   subject_dice and voxel_dice will be calculated.
+
+
+
+* I also include two models trained previously with these source code. The prediction masks generated 
+are included as well.
+
+================================================================================================================
+
+Hi Dr. Shen,
+
+Hope this ReadMe file may help you get familiar with these source code easier.
+If you have any questions, please feel free to contact me.
+
+Regards,
+Chaoyi
