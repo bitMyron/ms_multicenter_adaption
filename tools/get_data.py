@@ -414,7 +414,7 @@ def cross_validation_split_isbi(p_trains):
         val_index = []
         train_index = []
         for j in range(len(p_trains)):
-            if str(i) in p_trains[j]:
+            if str(i) in p_trains[j].split('_')[0]:
                 val_index.append(j)
             else:
                 train_index.append(j)
