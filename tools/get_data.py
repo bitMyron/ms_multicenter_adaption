@@ -202,7 +202,6 @@ def get_isbi_data(
                 axis=0
             ))
             p_trains.append(p_path + '_' + stage)
-        print(p_trains)
 
     # Lesion masks (we are using this function for training, so there should
     # always be a lesion mask).
@@ -211,7 +210,7 @@ def get_isbi_data(
     lesions = list(map(get_mask, lesion_names))
     brains = [np.full(lesions[0].shape, 1, dtype=int)] * len(lesions)
     example_nii = load_nii(os.path.join(d_path, p_path, 'preprocessed', '%s_%s_%s_pp.nii' % (p_path, stage, images[0])))
-    return data, lesions, brains, p_train, example_nii
+    return data, lesions, brains, p_trains, example_nii
 
 
 def get_messg_data(
