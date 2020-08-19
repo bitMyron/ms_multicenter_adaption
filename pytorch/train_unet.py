@@ -12,7 +12,7 @@ from pytorch.utils import color_codes, get_dirs, print_message, time_to_string
 from pytorch.models import LesionsUNet
 from pytorch.datasets import LoadLesionCroppingDataset
 from tools.get_data import (
-    get_data, get_isbi_data, get_lit_data, get_messg_data, get_case, cross_validation_split
+    get_data, get_isbi_data, get_lit_data, get_messg_data, get_case, cross_validation_split, cross_validation_split_isbi
 )
 from tools.lesion_manipulation import (
     remove_small_regions
@@ -31,7 +31,7 @@ def cross_train_test(
         images = ['flair', 't1']
     if filters is None:
         # filters = [32, 128, 256, 1024]
-        filters = [32, 32, 64, 128, 256]
+        filters = [32, 64, 128, 256]
     if patch_size is None:
         patch_size = (32, 32, 32)
     try:
@@ -70,7 +70,11 @@ def cross_train_test(
         tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_lit_data(d_path=d_path)
 
     # Get amount of training samples
-    cv_indexs = cross_validation_split(len(tr_lesions), n_fold=n_fold)
+    if task == 'isbi':
+        cv_indexs = cross_validation_split_isbi(p_trains)
+    else:
+        cv_indexs = cross_validation_split(len(tr_lesions), n_fold=n_fold)
+
     spacing = dict(example_nii.header.items())['pixdim'][1:4]
 
     # Cross train and test
@@ -163,10 +167,17 @@ def cross_train_test(
                     test_brain, patch_size=patch_size[0],
                     verbose=verbose
                 )
-
+            print(
+                '%sThe shape matters%s (shape of prediction %s)\n' %
+                (c['r'], c['nc'], str(seg.shape))
+            )
             seg_bin = np.argmax(seg, axis=0).astype(np.bool)
             # lesion_unet = remove_small_regions(seg_bin)
             lesion_unet = seg_bin
+            print(
+                '%sThe shape matters%s (shape of argmax %s)\n' %
+                (c['r'], c['nc'], str(lesion_unet.shape))
+            )
 
             mask_nii = nib.Nifti1Image(
                 lesion_unet,

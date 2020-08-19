@@ -381,8 +381,7 @@ def cross_validation_split(set_size, n_fold=5, val_test_ratio=1. / 3.):
         :param train_ratio: ratio of the training set
         :param val_ratio: ratio of the validation set (The rest is assigned to the test set)
         :param nfold: amount of folds
-        :return: list of numpy arrays for the concatenated images, lesion
-        mask and brain mask.
+        :return: indices of different types of sets
     """
     whole_indexs = list(range(set_size))
     random.shuffle(whole_indexs)
@@ -400,3 +399,33 @@ def cross_validation_split(set_size, n_fold=5, val_test_ratio=1. / 3.):
                                                                min(val_end_index, set_size):]
         result.append(tmp)
     return result
+
+
+def cross_validation_split_isbi(p_trains):
+    """
+        Function that generate train/val/test indexes for the cross-validation.
+        :param p_trains: patient names lsit
+        mask and brain mask.
+    """
+    result = []
+    # Split per patient
+    for i in range(5):
+        tmp = {}
+        val_index = []
+        train_index = []
+        for j in range(len(p_trains)):
+            if str(i) in p_trains[j]:
+                val_index.append(j)
+            else:
+                train_index.append(j)
+        # Shuffle use different stage of the patient as val and test
+        random.shuffle(val_index)
+        test_index = val_index[2:]
+        val_index = val_index[:2]
+        tmp['val_index'] = val_index
+        tmp['train_index'] = train_index
+        tmp['test_index'] = test_index
+        result.append(tmp)
+    return result
+
+
