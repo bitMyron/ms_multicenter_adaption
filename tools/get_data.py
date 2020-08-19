@@ -394,7 +394,7 @@ def cross_validation_split(set_size, n_fold=5, val_test_ratio=1. / 3.):
         val_start_index = int(set_size * fold / n_fold)
         val_end_index = int(set_size * fold / n_fold) + val_test_len
         tmp['val_index'] = whole_indexs[val_start_index:val_start_index + val_len]
-        tmp['test_index'] = whole_indexs[val_start_index+val_len:min(val_end_index, set_size)]
+        tmp['test_index'] = whole_indexs[val_start_index + val_len:min(val_end_index, set_size)]
         tmp['train_index'] = whole_indexs[0:val_start_index] + whole_indexs[
                                                                min(val_end_index, set_size):]
         result.append(tmp)
@@ -409,7 +409,7 @@ def cross_validation_split_isbi(p_trains):
     """
     result = []
     # Split per patient
-    for i in range(5):
+    for i in range(1, 6):
         tmp = {}
         val_index = []
         train_index = []
@@ -427,5 +427,3 @@ def cross_validation_split_isbi(p_trains):
         tmp['test_index'] = test_index
         result.append(tmp)
     return result
-
-
