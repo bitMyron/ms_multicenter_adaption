@@ -202,6 +202,7 @@ def get_isbi_data(
                 axis=0
             ))
             p_trains.append(p_path + '_' + stage)
+        print(p_trains)
 
     # Lesion masks (we are using this function for training, so there should
     # always be a lesion mask).
