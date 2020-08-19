@@ -425,5 +425,6 @@ def cross_validation_split_isbi(p_trains):
         tmp['val_index'] = val_index
         tmp['train_index'] = train_index
         tmp['test_index'] = test_index
+        print(tmp)
         result.append(tmp)
     return result
