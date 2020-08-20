@@ -686,10 +686,16 @@ class LesionsUNet(BaseModel):
 
         # <Loss function setup>
         self.train_functions = [
+            # {
+            #     'name': 'dsc',
+            #     'weight': 1,
+            #     'f': lambda p, t: multidsc_loss(p, t)
+            # },
             {
                 'name': 'dsc',
                 'weight': 1,
-                'f': lambda p, t: multidsc_loss(p, t)
+                'f': lambda p, t:  dsc_loss(
+                    p[:, 0, ...], torch.squeeze((t == 0), dim=1))
             },
             {
                 'name': 'xentr',
