@@ -269,7 +269,7 @@ def get_messg_data(
                 [
                     get_normalised_image(
                         os.path.join(d_path, p, '%s_preprocessed.nii.gz' % im),
-                        mask_i,
+                        None,
                     ) for im in images
                 ],
                 axis=0
