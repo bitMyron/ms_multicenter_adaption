@@ -244,7 +244,7 @@ def get_messg_data(
         os.path.join(d_path, p_path, lesion_mask_name) for p_path in p_train
     ]
     if images is None:
-        images = ['flair', 't1', 'gado', 'dp']
+        images = ['flair', 't1']
     images = [tmp.upper() for tmp in images]
 
     # Brain masks (either a real mask, or an image masked)

@@ -42,8 +42,6 @@ def cross_train_test(
 
     if args['task']:
         task = args['task']
-    if task == 'msseg':
-        images = ['flair', 't1', 'gado', 'dp']
     if d_path is None:
         d_path = args['dataset_path']
     o_path = args['output_path']
@@ -195,7 +193,6 @@ def cross_train_test(
             get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
 
         seg_net.save_model(os.path.join(cv_path, model_name))
-
 
         if verbose > 0:
             time_str = time.strftime(

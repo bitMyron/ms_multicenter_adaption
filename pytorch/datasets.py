@@ -2,7 +2,7 @@ import itertools
 import numpy as np
 from torch.utils.data.dataset import Dataset
 from .utils import get_normalised_image
-
+from copy import deepcopy
 
 ''' Utility function for datasets '''
 
@@ -94,7 +94,7 @@ class LoadLesionCroppingDataset(Dataset):
     """
     def __init__(
             self,
-            cases, labels, masks, patch_size=32, overlap=0, filtered=True,
+            cases, labels, masks, patch_size=32, overlap=0, filtered=True, balanced=True,
             verbose=1
     ):
         # Init
@@ -107,6 +107,8 @@ class LoadLesionCroppingDataset(Dataset):
         self.masks = []
         self.labels = []
         self.cases = []
+        self.filtered = filtered
+        self.balanced = balanced
         # That's the big loop that loads all the images. I added some verbosity
         # options for debugging, too. By default they should not be called
         # (verbosity default is 0).
@@ -184,13 +186,40 @@ class LoadLesionCroppingDataset(Dataset):
         # is extremely underrepresented, we will filter this preliminary slices
         # to guarantee that we only keep the ones that contain at least one
         # lesion voxel.
-        if filtered:
-            self.patch_slices = [
-                [s for s in slices_i if np.sum(label[s]) > 0]
-                for label, slices_i in zip(self.labels, slices)
-            ]
+        # if filtered:
+        #     self.patch_slices = [
+        #         [s for s in slices_i if np.sum(label[s]) > 0]
+        #         for label, slices_i in zip(self.labels, slices)
+        #     ]
+        # else:
+        #     self.patch_slices = slices
+
+        # ... however, being inside the bounding box doesn't guarantee that the
+        # patch itself will contain any lesion voxels. Since, the lesion class
+        # is extremely underrepresented, we will filter this preliminary slices
+        # to guarantee that we only keep the ones that contain at least one
+        # lesion voxel.
+        if self.filtered:
+            if self.balanced:
+                self.patch_slices = [
+                    (s, i) for i, (label, s_i) in enumerate(zip(self.labels, slices))
+                    for s in s_i if np.sum(label[s]) > 0
+                ]
+                self.bck_slices = [
+                    (s, i) for i, (label, s_i) in enumerate(zip(self.labels, slices))
+                    for s in s_i if np.sum(label[s]) == 0
+                ]
+                self.current_bck = deepcopy(self.bck_slices)
+            else:
+                self.patch_slices = [
+                    (s, i) for i, (label, s_i) in enumerate(zip(self.labels, slices))
+                    for s in s_i if np.sum(label[s]) > 0
+                ]
         else:
-            self.patch_slices = slices
+            self.patch_slices = [
+                (s, i) for i, (label, s_i) in enumerate(zip(self.labels, slices))
+                for s in s_i
+            ]
 
         # This cumulative list has two purposes. One of them is giving the
         # length of the dataset ([-1] element), and the other is helping
