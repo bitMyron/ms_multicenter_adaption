@@ -669,7 +669,7 @@ class LesionsUNet(BaseModel):
         self.t_val = 0
         self.device = device
         self.dropout = dropout
-
+        print("image channel %s\n" % str(n_images))
         # <Parameter setup>
         self.autoencoder = Autoencoder(
             conv_filters, device, n_images, pooling=True, norm=nn.BatchNorm3d
