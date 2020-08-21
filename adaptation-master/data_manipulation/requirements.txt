@@ -1,0 +1,11 @@
+nibabel
+numpy
+scikit-image
+scikit-learn
+scipy
+sklearn
+torch
+torchvision
+SimpleITK
+matplotlib
+statsmodels
