@@ -29,6 +29,8 @@ def cross_train_test(
     d_path = args.get('dataset_path', None)
     if images is None:
         images = ['flair', 't1']
+    if task == 'msseg':
+        images = ['flair', 't1', 'gado', 'dp']
     if filters is None:
         # filters = [32, 128, 256, 1024]
         filters = [32, 64, 128, 256]
