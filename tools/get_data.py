@@ -268,7 +268,8 @@ def get_messg_data(
             np.stack(
                 [
                     get_normalised_image(
-                        os.path.join(d_path, p, '%s_preprocessed.nii.gz' % im),
+                        os.path.join(d_path, p, '3D%s.nii.gz' % im),
+                        # os.path.join(d_path, p, '%s_preprocessed.nii.gz' % im),
                         mask_i,
                     ) for im in images
                 ],
