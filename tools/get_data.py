@@ -244,7 +244,7 @@ def get_messg_data(
         os.path.join(d_path, p_path, lesion_mask_name) for p_path in p_train
     ]
     if images is None:
-        images = ['flair', 't1']
+        images = ['flair', 't1', 'gado', 'dp']
     images = [tmp.upper() for tmp in images]
 
     # Brain masks (either a real mask, or an image masked)
@@ -268,8 +268,8 @@ def get_messg_data(
             np.stack(
                 [
                     get_normalised_image(
-                        os.path.join(d_path, p, '3D%s.nii.gz' % im),
-                        # os.path.join(d_path, p, '%s_preprocessed.nii.gz' % im),
+                        # os.path.join(d_path, p, '3D%s.nii.gz' % im),
+                        os.path.join(d_path, p, '%s_preprocessed.nii.gz' % im),
                         mask_i,
                     ) for im in images
                 ],
