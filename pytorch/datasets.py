@@ -235,17 +235,27 @@ class LoadLesionCroppingDataset(Dataset):
 
     def __getitem__(self, index):
         # We select the case (here is where max_slice comes in handy ;))
-        case_idx = np.min(np.where(self.max_slice > index))
-        case = self.cases[case_idx]
+        # case_idx = np.min(np.where(self.max_slice > index))
+        # case = self.cases[case_idx]
+        #
+        # # Slice selector
+        # slices = [0] + self.max_slice.tolist()
+        # patch_idx = index - slices[case_idx]
+        # case_slices = self.patch_slices[case_idx]
 
-        # Slice selector
-        slices = [0] + self.max_slice.tolist()
-        patch_idx = index - slices[case_idx]
-        case_slices = self.patch_slices[case_idx]
+        if index < len(self.patch_slices):
+            slice_i, case_idx = self.patch_slices[index]
+        else:
+            index = np.random.randint(len(self.current_bck))
+            slice_i, case_idx = self.current_bck.pop(index)
+            if len(self.current_bck) == 0:
+                self.current_bck = deepcopy(self.bck_slices)
+
+        case = self.cases[case_idx]
 
         # We get the slice indexes
         none_slice = (slice(None, None),)
-        slice_i = case_slices[patch_idx]
+        # slice_i = case_slices[patch_idx]
 
         # Patch "extraction".
         data = case[none_slice + slice_i].astype(np.float32)
