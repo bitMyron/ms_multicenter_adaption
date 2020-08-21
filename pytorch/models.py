@@ -687,72 +687,72 @@ class LesionsUNet(BaseModel):
         )
         self.seg.to(device)
 
-        # # <Loss function setup>
-        # self.train_functions = [
-        #     # {
-        #     #     'name': 'dsc',
-        #     #     'weight': 1,
-        #     #     'f': lambda p, t: multidsc_loss(p, t)
-        #     # },
-        #     {
-        #         'name': 'dsc',
-        #         'weight': 1,
-        #         'f': lambda p, t:  dsc_loss(
-        #             p[:, 0, ...], torch.squeeze((t == 0), dim=1))
-        #     },
-        #     {
-        #         'name': 'xentr',
-        #         'weight': 1,
-        #         'f': lambda p, t: F.cross_entropy(
-        #             p, torch.squeeze(t, dim=1).type(torch.long).to(p.device)
-        #         )
-        #     },
-        # ]
-
         # <Loss function setup>
         self.train_functions = [
+            # {
+            #     'name': 'dsc',
+            #     'weight': 1,
+            #     'f': lambda p, t: multidsc_loss(p, t)
+            # },
             {
                 'name': 'dsc',
                 'weight': 1,
-                'f': lambda p, t: dsc_loss(p[0], t)
+                'f': lambda p, t:  dsc_loss(
+                    p[:, 1, ...], torch.squeeze((t == 1), dim=1))
             },
             {
-                'name': 'xentropy',
+                'name': 'xentr',
                 'weight': 1,
-                'f': lambda p, t: F.binary_cross_entropy(
-                    p[0],
-                    t.type_as(p[0]).to(p[0].device),
+                'f': lambda p, t: F.cross_entropy(
+                    p, torch.squeeze(t, dim=1).type(torch.long).to(p.device)
                 )
-            }
+            },
         ]
 
-        if self.deep:
-            # DSC loss for the deep supervision branch (bottleneck).
-            self.train_functions += [
-                {
-                    'name': 'dp dsc',
-                    'weight': 1,
-                    'f': lambda p, t: dsc_loss(
-                        p[1],
-                        F.max_pool3d(
-                            t.type_as(p[1]),
-                            2 ** len(self.autoencoder.down)
-                        ).to(p[1].device)
-                    )
-                },
-                # Focal loss for the deep supervision branch (bottleneck).
-                {
-                    'name': 'dp xentropy',
-                    'weight': 1,
-                    'f': lambda p, t: F.binary_cross_entropy(
-                        p[1],
-                        F.max_pool3d(
-                            t.type_as(p[1]),
-                            2 ** len(self.autoencoder.down)
-                        ).to(p[1].device)
-                    )
-                },
-            ]
+        # <Loss function setup>
+        # self.train_functions = [
+        #     {
+        #         'name': 'dsc',
+        #         'weight': 1,
+        #         'f': lambda p, t: dsc_loss(p[0], t)
+        #     },
+        #     {
+        #         'name': 'xentropy',
+        #         'weight': 1,
+        #         'f': lambda p, t: F.binary_cross_entropy(
+        #             p[0],
+        #             t.type_as(p[0]).to(p[0].device),
+        #         )
+        #     }
+        # ]
+        #
+        # if self.deep:
+        #     # DSC loss for the deep supervision branch (bottleneck).
+        #     self.train_functions += [
+        #         {
+        #             'name': 'dp dsc',
+        #             'weight': 1,
+        #             'f': lambda p, t: dsc_loss(
+        #                 p[1],
+        #                 F.max_pool3d(
+        #                     t.type_as(p[1]),
+        #                     2 ** len(self.autoencoder.down)
+        #                 ).to(p[1].device)
+        #             )
+        #         },
+        #         # Focal loss for the deep supervision branch (bottleneck).
+        #         {
+        #             'name': 'dp xentropy',
+        #             'weight': 1,
+        #             'f': lambda p, t: F.binary_cross_entropy(
+        #                 p[1],
+        #                 F.max_pool3d(
+        #                     t.type_as(p[1]),
+        #                     2 ** len(self.autoencoder.down)
+        #                 ).to(p[1].device)
+        #             )
+        #         },
+        #     ]
 
 
         self.val_functions = [
