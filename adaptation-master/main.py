@@ -1037,7 +1037,7 @@ def baseline_msseg(test_enabled=False, verbose=0):
 def eval_msseg_nets(verbose=0):
     # Init
     c = color_codes()
-    d_path = parse_inputs()['visms_dir']
+    d_path = parse_inputs()['msseg_dir']
     lesion_dicts = prepare_msseg_patients(parse_inputs()['msseg_dir'], verbose)
 
     print('{:}Evaluating the models (MSSEG){:}'.format(c['g'], c['nc']))
