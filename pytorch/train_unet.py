@@ -150,39 +150,28 @@ def cross_train_test(
             bb = get_bb(test_brain_mask)
 
             seg_im = np.zeros_like(gt_lesion_mask)
-            seg_bb = seg_net.lesions(test_brain)
+            # seg_bb = seg_net.lesions(test_brain)
+
+
+            try:
+                seg_bb = seg_net.lesions(
+                    test_brain, verbose=verbose
+                )
+            except RuntimeError:
+                if verbose > 0:
+                    print(
+                        '\033[K{:}CUDA RAM error - '
+                        )
+                seg_bb = seg_net.patch_lesions(
+                    test_brain, patch_size=patch_size[0]*2,
+                    verbose=verbose
+                )
+
             if len(seg_bb.shape) > 3:
                 seg_im[bb] = np.argmax(seg_bb, axis=0) + 1
             else:
                 seg_im[bb] = seg_bb > 0.5
             seg_im[np.logical_not(bb)] = 0
-
-            # try:
-            #     seg = seg_net.lesions(
-            #         test_brain, verbose=verbose
-            #     )
-            # except RuntimeError:
-            #     if verbose > 0:
-            #         test_elapsed = time.time() - test_start
-            #         test_eta = len(p_test) * test_elapsed / (test_case_idx + 1)
-            #         print(
-            #             '\033[K{:}CUDA RAM error - '
-            #             '{:}Testing again with patches patient {:>13} '
-            #             '{:}({:4d}/{:4d} - {:5.2f}%){:} {:}'
-            #             ' ETA: {:} {:}'.format(
-            #                 c['r'], c['g'], p_test[test_case_idx], c['c'],
-            #                 test_case_idx + 1, len(p_test), 100 * (test_case_idx + 1) / len(p_test),
-            #                 c['g'],
-            #                 time_to_string(test_elapsed),
-            #                 time_to_string(test_eta),
-            #                 c['nc']
-            #             ),
-            #             end='\r'
-            #         )
-            #     seg = seg_net.patch_lesions(
-            #         test_brain, patch_size=patch_size[0],
-            #         verbose=verbose
-            #     )
 
             # seg_bin = np.argmax(seg, axis=0).astype(np.bool)
             # # lesion_unet = remove_small_regions(seg_bin)
