@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from time import strftime
 from pytorch.utils import color_codes, get_dirs, print_message, time_to_string
 from pytorch.models import LesionsUNet
-from pytorch.datasets import LoadLesionCroppingDataset
+from pytorch.datasets import LesionCroppingDataset
 from tools.get_data import (
     get_data, get_isbi_data, get_lit_data, get_messg_data, get_case, cross_validation_split, cross_validation_split_isbi
 )
@@ -105,18 +105,22 @@ def cross_train_test(
             conv_filters=filters, n_images=len(images), dropout=dropout
         )
 
-        # Prepare train/val dataloader
-        train_dataset = LoadLesionCroppingDataset(
-            d_train, l_train, m_train, patch_size, overlap,
-            verbose=verbose
+
+        train_dataset = LesionCroppingDataset(
+            d_train, l_train, m_train, patch_size, patch_size // 2,
         )
+        # Prepare train/val dataloader
+        # train_dataset = LoadLesionCroppingDataset(
+        #     d_train, l_train, m_train, patch_size, overlap,
+        #     verbose=verbose
+        # )
         train_dataloader = DataLoader(
             train_dataset, batch_size, True, num_workers=num_workers
         )
-        val_dataset = LoadLesionCroppingDataset(
-            d_val, l_val, m_val, patch_size=patch_size,
-            verbose=verbose
+        val_dataset = LesionCroppingDataset(
+            d_val, l_val, m_val, patch_size * 2, 0, filtered=False,
         )
+
         val_dataloader = DataLoader(
             val_dataset, batch_size, num_workers=num_workers
         )
@@ -214,129 +218,129 @@ def cross_train_test(
     metric_file.close()
 
 
-def train_net(
-        args, net, model_name, p_train, patch_size, overlap, images=None,
-        batch_size=16, d_path=None, verbose=0, train_val_split=0.2, task=None
-):
-    """
-    Function to train a network with a set of training images.
-    :param args: arguments from the main funciton.
-    :param net: Network to be trained.
-    :param model_name: Name that will be used to save the model weights.
-    :param patch_size: Size of the patches for training.
-    :param overlap: Overlap between the training patches.
-    :param batch_size: Number of patches per batch for training.
-    :param p_train: Images for training.
-    :param d_path: Path to the images.
-    :param verbose: Level of verbosity.
-    :param train_val_split: Ratio for training and validation set split.
-    :param task: Training task name.
-    :return: None
-    """
-    # Init
-    c = color_codes()
-    if d_path is None:
-        d_path = args['dataset_path']
-    epochs = args['epochs']
-    patience = args['patience']
-    training_start = time.time()
-
-    # < UNET >
-    try:
-        net.load_model(os.path.join(d_path, model_name))
-    except IOError:
-        if verbose > 0:
-            print('Loading the {:}data{:}'.format(c['b'], c['nc']))
-
-        # Mariano's data loading
-        # tr_data, tr_lesions, tr_brains = get_data(
-        #     p_train, d_path, images=images, preload=False, verbose=verbose
-        # )
-
-        if task == 'lit':
-            # LIT data loading
-            tr_data, tr_lesions, tr_brains = get_lit_data(d_path=d_path)
-        elif task == 'msseg':
-            # MSSEG2016 data loading
-            tr_data, tr_lesions, tr_brains = get_messg_data(d_path=d_path)
-        elif task == 'isbi':
-            # ISBI data loading
-            tr_data, tr_lesions, tr_brains = get_isbi_data(d_path=d_path)
-        else:
-            # default data loader
-            tr_data, tr_lesions, tr_brains = get_data(d_path=d_path)
-
-        # Datasets / Dataloaders should be added here
-        if verbose > 1:
-            print('Preparing the training datasets / dataloaders')
-        # What follows are hard coded parameters. They could (and probably
-        # should) be defined as function / command line parameters.
-        val_split = train_val_split
-        num_workers = 4
-        # Here we'll do the training / validation split...
-        n_samples = len(tr_data)
-        n_t_samples = int(n_samples * (1 - val_split))
-
-        d_train = tr_data[:n_t_samples]
-        d_val = tr_data[n_t_samples:]
-
-        l_train = tr_lesions[:n_t_samples]
-        l_val = tr_lesions[n_t_samples:]
-
-        m_train = tr_brains[:n_t_samples]
-        m_val = tr_brains[n_t_samples:]
-
-        # ... so we can finally define the datasets for the network.
-        if verbose > 1:
-            print('Training dataset (with validation)')
-
-        train_dataset = LoadLesionCroppingDataset(
-            d_train, l_train, m_train, patch_size, overlap,
-            verbose=verbose
-        )
-
-        train_dataloader = DataLoader(
-            train_dataset, batch_size, True, num_workers=num_workers
-        )
-
-        if verbose > 1:
-            print('Validation dataset')
-        val_dataset = LoadLesionCroppingDataset(
-            d_val, l_val, m_val, patch_size=patch_size,
-            verbose=verbose
-        )
-        val_dataloader = DataLoader(
-            val_dataset, batch_size, num_workers=num_workers
-        )
-
-        if verbose > 0:
-            n_params = sum(
-                p.numel() for p in net.parameters() if p.requires_grad
-            )
-            print(
-                '%sStarting training with a unet%s (%s%d%s parameters)' %
-                (c['c'], c['nc'], c['b'], n_params, c['nc'])
-            )
-
-        # And all that's left is to train and save the model.
-        net.fit(
-            train_dataloader,
-            val_dataloader,
-            epochs=epochs,
-            patience=patience,
-            verbose=verbose
-        )
-        net.save_model(os.path.join(d_path, model_name))
-
-    if verbose > 0:
-        time_str = time.strftime(
-            '%H hours %M minutes %S seconds',
-            time.gmtime(time.time() - training_start)
-        )
-        print(
-            '%sTraining finished%s (total time %s)\n' %
-            (c['r'], c['nc'], time_str)
-        )
+# def train_net(
+#         args, net, model_name, p_train, patch_size, overlap, images=None,
+#         batch_size=16, d_path=None, verbose=0, train_val_split=0.2, task=None
+# ):
+#     """
+#     Function to train a network with a set of training images.
+#     :param args: arguments from the main funciton.
+#     :param net: Network to be trained.
+#     :param model_name: Name that will be used to save the model weights.
+#     :param patch_size: Size of the patches for training.
+#     :param overlap: Overlap between the training patches.
+#     :param batch_size: Number of patches per batch for training.
+#     :param p_train: Images for training.
+#     :param d_path: Path to the images.
+#     :param verbose: Level of verbosity.
+#     :param train_val_split: Ratio for training and validation set split.
+#     :param task: Training task name.
+#     :return: None
+#     """
+#     # Init
+#     c = color_codes()
+#     if d_path is None:
+#         d_path = args['dataset_path']
+#     epochs = args['epochs']
+#     patience = args['patience']
+#     training_start = time.time()
+#
+#     # < UNET >
+#     try:
+#         net.load_model(os.path.join(d_path, model_name))
+#     except IOError:
+#         if verbose > 0:
+#             print('Loading the {:}data{:}'.format(c['b'], c['nc']))
+#
+#         # Mariano's data loading
+#         # tr_data, tr_lesions, tr_brains = get_data(
+#         #     p_train, d_path, images=images, preload=False, verbose=verbose
+#         # )
+#
+#         if task == 'lit':
+#             # LIT data loading
+#             tr_data, tr_lesions, tr_brains = get_lit_data(d_path=d_path)
+#         elif task == 'msseg':
+#             # MSSEG2016 data loading
+#             tr_data, tr_lesions, tr_brains = get_messg_data(d_path=d_path)
+#         elif task == 'isbi':
+#             # ISBI data loading
+#             tr_data, tr_lesions, tr_brains = get_isbi_data(d_path=d_path)
+#         else:
+#             # default data loader
+#             tr_data, tr_lesions, tr_brains = get_data(d_path=d_path)
+#
+#         # Datasets / Dataloaders should be added here
+#         if verbose > 1:
+#             print('Preparing the training datasets / dataloaders')
+#         # What follows are hard coded parameters. They could (and probably
+#         # should) be defined as function / command line parameters.
+#         val_split = train_val_split
+#         num_workers = 4
+#         # Here we'll do the training / validation split...
+#         n_samples = len(tr_data)
+#         n_t_samples = int(n_samples * (1 - val_split))
+#
+#         d_train = tr_data[:n_t_samples]
+#         d_val = tr_data[n_t_samples:]
+#
+#         l_train = tr_lesions[:n_t_samples]
+#         l_val = tr_lesions[n_t_samples:]
+#
+#         m_train = tr_brains[:n_t_samples]
+#         m_val = tr_brains[n_t_samples:]
+#
+#         # ... so we can finally define the datasets for the network.
+#         if verbose > 1:
+#             print('Training dataset (with validation)')
+#
+#         train_dataset = LoadLesionCroppingDataset(
+#             d_train, l_train, m_train, patch_size, overlap,
+#             verbose=verbose
+#         )
+#
+#         train_dataloader = DataLoader(
+#             train_dataset, batch_size, True, num_workers=num_workers
+#         )
+#
+#         if verbose > 1:
+#             print('Validation dataset')
+#         val_dataset = LoadLesionCroppingDataset(
+#             d_val, l_val, m_val, patch_size=patch_size,
+#             verbose=verbose
+#         )
+#         val_dataloader = DataLoader(
+#             val_dataset, batch_size, num_workers=num_workers
+#         )
+#
+#         if verbose > 0:
+#             n_params = sum(
+#                 p.numel() for p in net.parameters() if p.requires_grad
+#             )
+#             print(
+#                 '%sStarting training with a unet%s (%s%d%s parameters)' %
+#                 (c['c'], c['nc'], c['b'], n_params, c['nc'])
+#             )
+#
+#         # And all that's left is to train and save the model.
+#         net.fit(
+#             train_dataloader,
+#             val_dataloader,
+#             epochs=epochs,
+#             patience=patience,
+#             verbose=verbose
+#         )
+#         net.save_model(os.path.join(d_path, model_name))
+#
+#     if verbose > 0:
+#         time_str = time.strftime(
+#             '%H hours %M minutes %S seconds',
+#             time.gmtime(time.time() - training_start)
+#         )
+#         print(
+#             '%sTraining finished%s (total time %s)\n' %
+#             (c['r'], c['nc'], time_str)
+#         )
 
 
 def test_net(
@@ -543,93 +547,93 @@ def test_net(
         metric_file.close()
 
 
-def train_full_model(
-        args,
-        p_tag='SNAC_WMH',
-        d_path=None,
-        train_list=None,
-        images=None,
-        filters=None,
-        patch_size=32,
-        batch_size=32,
-        dropout=.0,
-        verbose=1,
-        task='lit'
-):
-    """
-    Function to train a model with all the patients of a folder, or the ones
-    defined in a specific text file.
-    :param args: arguments from the main funciton.
-    :param p_tag: Tag that must be in the folder name of each patient. By
-     default I used the tag that's common on the SNAC cases.
-    :param d_path: Path to the images.
-    :param train_list: Filename with the lists of patients for training.
-    :param images: Images that will be used (default: T1w and FLAIR)
-    :param filters: Filters for each layer of the unet.
-    :param patch_size: Size of the patches. It can either be a tuple with the
-     length of each dimension or just a general length that applies to all
-     dimensions.
-    :param batch_size: Number of patches per batch. Heavily linked to the
-     patch size (memory consumption).
-    :param dropout: Dropout value.
-    :param verbose: Verbosity level.
-    :param task: Task name for model training.
-    """
-    c = color_codes()
-
-    # Init
-    if args['dropout']:
-        dropout = args['dropout']
-    if d_path is None:
-        d_path = args['dataset_path']
-    if images is None:
-        images = ['flair', 't1']
-    if filters is None:
-        filters = [32, 128, 256, 1024]
-    if patch_size is None:
-        patch_size = (32, 32, 32)
-    if args['task']:
-        task = args['task']
-    try:
-        overlap = tuple([p // 2 for p in patch_size])
-    except TypeError:
-        overlap = (patch_size // 2,) * 3
-        patch_size = (patch_size,) * 3
-    if train_list is None:
-        tmp = get_dirs(d_path)  # if p_tag in p
-        p_train = sorted(
-            [p for p in tmp],
-            key=lambda p: int(''.join(filter(str.isdigit, p)))
-        )
-    else:
-        with open(os.path.join(d_path, train_list)) as f:
-            content = f.readlines()
-        # We might want to remove whitespace characters like `\n` at the end of
-        # each line
-        p_train = [x.strip() for x in content]
-
-    if verbose > 0:
-        print(
-            '{:}[{:}] {:}Training with [{:}] '
-            '(filters = [{:}], patch size = [{:}], '
-            'dropout = {:4.2f}){:}'.format(
-                c['c'], strftime("%H:%M:%S"), c['g'], ', '.join(images),
-                ', '.join([str(f) for f in filters]),
-                ', '.join([str(ps) for ps in patch_size]),
-                dropout, c['nc']
-            )
-        )
-    if verbose > 1:
-        print('{:} patients for training'.format(len(p_train)))
-
-    model_name = 'lesions-unet.{:}_model.pt'.format('.'.join(images))
-    seg_net = LesionsUNet(
-        conv_filters=filters, n_images=len(images), dropout=dropout
-    )
-    train_net(
-        seg_net, model_name, p_train, patch_size, overlap, images=images,
-        batch_size=batch_size, d_path=d_path, verbose=verbose, task=task
-    )
+# def train_full_model(
+#         args,
+#         p_tag='SNAC_WMH',
+#         d_path=None,
+#         train_list=None,
+#         images=None,
+#         filters=None,
+#         patch_size=32,
+#         batch_size=32,
+#         dropout=.0,
+#         verbose=1,
+#         task='lit'
+# ):
+#     """
+#     Function to train a model with all the patients of a folder, or the ones
+#     defined in a specific text file.
+#     :param args: arguments from the main funciton.
+#     :param p_tag: Tag that must be in the folder name of each patient. By
+#      default I used the tag that's common on the SNAC cases.
+#     :param d_path: Path to the images.
+#     :param train_list: Filename with the lists of patients for training.
+#     :param images: Images that will be used (default: T1w and FLAIR)
+#     :param filters: Filters for each layer of the unet.
+#     :param patch_size: Size of the patches. It can either be a tuple with the
+#      length of each dimension or just a general length that applies to all
+#      dimensions.
+#     :param batch_size: Number of patches per batch. Heavily linked to the
+#      patch size (memory consumption).
+#     :param dropout: Dropout value.
+#     :param verbose: Verbosity level.
+#     :param task: Task name for model training.
+#     """
+#     c = color_codes()
+#
+#     # Init
+#     if args['dropout']:
+#         dropout = args['dropout']
+#     if d_path is None:
+#         d_path = args['dataset_path']
+#     if images is None:
+#         images = ['flair', 't1']
+#     if filters is None:
+#         filters = [32, 128, 256, 1024]
+#     if patch_size is None:
+#         patch_size = (32, 32, 32)
+#     if args['task']:
+#         task = args['task']
+#     try:
+#         overlap = tuple([p // 2 for p in patch_size])
+#     except TypeError:
+#         overlap = (patch_size // 2,) * 3
+#         patch_size = (patch_size,) * 3
+#     if train_list is None:
+#         tmp = get_dirs(d_path)  # if p_tag in p
+#         p_train = sorted(
+#             [p for p in tmp],
+#             key=lambda p: int(''.join(filter(str.isdigit, p)))
+#         )
+#     else:
+#         with open(os.path.join(d_path, train_list)) as f:
+#             content = f.readlines()
+#         # We might want to remove whitespace characters like `\n` at the end of
+#         # each line
+#         p_train = [x.strip() for x in content]
+#
+#     if verbose > 0:
+#         print(
+#             '{:}[{:}] {:}Training with [{:}] '
+#             '(filters = [{:}], patch size = [{:}], '
+#             'dropout = {:4.2f}){:}'.format(
+#                 c['c'], strftime("%H:%M:%S"), c['g'], ', '.join(images),
+#                 ', '.join([str(f) for f in filters]),
+#                 ', '.join([str(ps) for ps in patch_size]),
+#                 dropout, c['nc']
+#             )
+#         )
+#     if verbose > 1:
+#         print('{:} patients for training'.format(len(p_train)))
+#
+#     model_name = 'lesions-unet.{:}_model.pt'.format('.'.join(images))
+#     seg_net = LesionsUNet(
+#         conv_filters=filters, n_images=len(images), dropout=dropout
+#     )
+#     train_net(
+#         seg_net, model_name, p_train, patch_size, overlap, images=images,
+#         batch_size=batch_size, d_path=d_path, verbose=verbose, task=task
+#     )
 
 
 def test_folder(

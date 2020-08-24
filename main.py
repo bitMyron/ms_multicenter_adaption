@@ -5,7 +5,7 @@ The main file running inside the docker (the starting point)
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2,3])
 import argparse
-from pytorch.train_unet import test_folder, train_full_model, cross_train_test
+from pytorch.train_unet import test_folder, cross_train_test
 
 def parse_args():
     """
@@ -105,8 +105,8 @@ def main():
 
     args = parse_args()
     # Training with all cases
-    if args['run_train']:
-        train_full_model(args, verbose=1)
+    # if args['run_train']:
+    #     train_full_model(args, verbose=1)
     if args['run_test']:
         test_folder(args, verbose=1)
         # test_folder(

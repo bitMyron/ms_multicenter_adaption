@@ -1,10 +1,10 @@
+import time
 import itertools
+from copy import deepcopy
 import numpy as np
 from torch.utils.data.dataset import Dataset
-from .utils import get_normalised_image
-from copy import deepcopy
-
-''' Utility function for datasets '''
+from data_manipulation.datasets import get_slices_bb
+from data_manipulation.utils import get_normalised_image, time_to_string
 
 
 def centers_to_slice(voxels, patch_half):
@@ -74,125 +74,80 @@ def get_slices(masks, patch_size, overlap):
     return patch_slices
 
 
-''' Datasets '''
-
-
-class LoadLesionCroppingDataset(Dataset):
-    """
-    This is a dataset classes, that loads each case in the constructor. The
-    idea was to avoid loading all cases in a single step, so instead, what I do
-    is load case by case, get its bounding box and keep only the information
-    inside it. This is a training dataset and we only want patches that
-    actually have lesions since there are lots of non-lesion voxels
-    anyways. Just by keeping the bounding box, we use a smaller fraction
-    of the RAM used if we loaded all the cases.
-    A further improvement in terms of RAM would be to only load the cases
-    every time we want a patch. However, that is extremely slow (loading
-    NIFTI files, for some reason, is not a fast process). I tried it and
-    thought the current approach is the best compromise. We won't need to
-    retrain these models anyways ;)
-    """
+class BalancedCroppingDataset(Dataset):
     def __init__(
             self,
-            cases, labels, masks, patch_size=32, overlap=0, filtered=True, balanced=True,
-            verbose=1
+            cases, labels, masks, patch_size=32, overlap=0, filtered=True,
+            balanced=True,
     ):
         # Init
         data_shape = masks[0].shape
         if type(patch_size) is not tuple:
-            patch_size = (patch_size,) * len(data_shape)
+            self.patch_size = (patch_size,) * len(data_shape)
+        else:
+            self.patch_size = patch_size
         if type(overlap) is not tuple:
-            overlap = (overlap,) * len(data_shape)
-
-        self.masks = []
-        self.labels = []
-        self.cases = []
+            self.overlap = (overlap,) * len(data_shape)
+        else:
+            self.overlap = overlap
         self.filtered = filtered
         self.balanced = balanced
-        # That's the big loop that loads all the images. I added some verbosity
-        # options for debugging, too. By default they should not be called
-        # (verbosity default is 0).
-        for i, (mask, case, label) in enumerate(zip(masks, cases, labels)):
-            # Indices for the bounding box (mask are already loaded since
-            # they are ligh in RAM (binary masks).
-            if verbose > 1:
-                print(
-                    '\033[KIndices {:3d}/{:3d} ({:5.2f})'.format(
-                        i, len(cases), 100 * (i + 1) / len(cases)
-                    ),
-                    end='\r'
-                )
-            indices = np.where(mask > 0)
-            # Bounding box computation.
-            if verbose > 1:
-                print(
-                    '\033[KBB {:3d}/{:3d} ({:5.2f})     '.format(
-                        i, len(cases), 100 * (i + 1) / len(cases)
-                    ),
-                    end='\r'
-                )
-            bb_i = tuple(
-                slice(min_i, max_i)
-                for min_i, max_i in zip(
-                    np.min(indices, axis=-1), np.max(indices, axis=-1)
-                )
-            )
-            # Mask cropping.
-            if verbose > 1:
-                print(
-                    '\033[KMasks {:3d}/{:3d} ({:5.2f})  '.format(
-                        i, len(cases), 100 * (i + 1) / len(cases)
-                    ),
-                    end='\r'
-                )
-            self.masks.append(mask[bb_i])
-            # Labels (lesion masks) cropping.
-            if verbose > 1:
-                print(
-                    '\033[KLabels {:3d}/{:3d} ({:5.2f}) '.format(
-                        i, len(cases), 100 * (i + 1) / len(cases)
-                    ),
-                    end='\r'
-                )
-            self.labels.append(label[bb_i])
-            # Image loading, normalisation (-mean/std_dev) and cropping.
-            if verbose > 1:
-                print(
-                    '\033[KImages {:3d}/{:3d} ({:5.2f}) '.format(
-                        i, len(cases), 100 * (i + 1) / len(cases)
-                    ),
-                    end='\r'
-                )
-            self.cases.append(
-                np.stack(
-                    case,
-                    axis=0
-                )
-            )
-            # self.cases.append(
-            #     np.stack(
-            #         [get_normalised_image(image, mask)[bb_i] for image in case],
-            #         axis=0
-            #     )
-            # )
-        if verbose > 1:
-            print('\033[K', end='\r')
+
+        self.cases = []
+        self.labels = []
+        self.patch_slices = []
+        self.bck_slices = []
+
+    def __getitem__(self, index):
+        if index < len(self.patch_slices):
+            slice_i, case_idx = self.patch_slices[index]
+        else:
+            index = np.random.randint(len(self.current_bck))
+            slice_i, case_idx = self.current_bck.pop(index)
+            if len(self.current_bck) == 0:
+                self.current_bck = deepcopy(self.bck_slices)
+
+        case = self.cases[case_idx]
+        none_slice = (slice(None, None),)
+        # Patch "extraction".
+        data = case[none_slice + slice_i].astype(np.float32)
+        labels = self.labels[case_idx].astype(np.uint8)
+
+        # We expand the labels to have 1 "channel". This is tricky depending
+        # on the loss function (some require channels, some don't).
+        target = np.expand_dims(labels[slice_i], 0)
+
+        return data, target
+
+    def __len__(self):
+        if self.filtered and self.balanced:
+            return len(self.patch_slices) * 2
+        else:
+            return len(self.patch_slices)
+
+
+class LesionCroppingDataset(BalancedCroppingDataset):
+    """
+    This is a training dataset and we only want patches that
+    actually have lesions since there are lots of non-lesion voxels
+    anyways.
+    """
+    def __init__(
+            self,
+            cases, labels, masks, patch_size=32, overlap=0, filtered=True,
+            balanced=True,
+    ):
+        # Init
+        super().__init__(
+            cases, labels, masks, patch_size, overlap, filtered, balanced
+        )
+
+        self.masks = masks
+        self.labels = labels
+        self.cases = cases
 
         # We get the preliminary patch slices (inside the bounding box)...
-        slices = get_slices(self.masks, patch_size, overlap)
-
-        # ... however, being inside the bounding box doesn't guarantee that the
-        # patch itself will contain any lesion voxels. Since, the lesion class
-        # is extremely underrepresented, we will filter this preliminary slices
-        # to guarantee that we only keep the ones that contain at least one
-        # lesion voxel.
-        # if filtered:
-        #     self.patch_slices = [
-        #         [s for s in slices_i if np.sum(label[s]) > 0]
-        #         for label, slices_i in zip(self.labels, slices)
-        #     ]
-        # else:
-        #     self.patch_slices = slices
+        slices = get_slices(self.masks, self.patch_size, self.overlap)
 
         # ... however, being inside the bounding box doesn't guarantee that the
         # patch itself will contain any lesion voxels. Since, the lesion class
@@ -221,51 +176,291 @@ class LoadLesionCroppingDataset(Dataset):
                 for s in s_i
             ]
 
-        # This cumulative list has two purposes. One of them is giving the
-        # length of the dataset ([-1] element), and the other is helping
-        # locate the case the patch belongs to given a linear index.
-        self.max_slice = np.cumsum(list(map(len, self.patch_slices)))
 
-    def _load_cases(self, cases, masks, bb):
-        # Just a function to load all normalised images.
-        self.cases = [
-            [get_normalised_image(name, mask_i)[bb_i] for name in names_i]
-            for names_i, mask_i, bb_i in zip(cases, masks, bb)
+class DACroppingDataset(Dataset):
+    def __init__(
+            self,
+            source, target, masks_source, masks_target, labels, patch_size=32,
+            overlap=0
+    ):
+        # Init
+        if type(patch_size) is not tuple:
+            self.patch_size = (patch_size,) * 3
+        else:
+            self.patch_size = patch_size
+        if type(overlap) is not tuple:
+            self.overlap = (overlap,) * 3
+        else:
+            self.overlap = overlap
+
+        self.source = source
+        self.target = target
+        self.masks_source = masks_source
+        self.masks_target = masks_target
+        self.labels = labels
+
+        # We get the patch slices (inside the bounding box)...
+        s_slices = get_slices(self.masks_source, self.patch_size, self.overlap)
+        t_slices = get_slices(self.masks_target, self.patch_size, self.overlap)
+
+        # ... however, being inside the bounding box doesn't guarantee that the
+        # patch itself will contain any lesion voxels. Since, the lesion class
+        # is extremely underrepresented, we will filter this preliminary slices
+        # to guarantee that we only keep the ones that contain at least one
+        # lesion voxel.
+        self.lesion_slices = [
+            (s, i) for i, (label, s_i) in enumerate(zip(self.labels, t_slices))
+            for s in s_i if np.sum(label[s]) > 0
+        ]
+        self.current_lesion = deepcopy(self.lesion_slices)
+        self.bck_slices = [
+            (s, i) for i, (label, s_i) in enumerate(zip(self.labels, t_slices))
+            for s in s_i if np.sum(label[s]) == 0
+        ]
+        self.current_bck = deepcopy(self.bck_slices)
+        self.source_slices = [
+            (s, i) for i, s_i in enumerate(s_slices) for s in s_i
         ]
 
     def __getitem__(self, index):
-        # We select the case (here is where max_slice comes in handy ;))
-        # case_idx = np.min(np.where(self.max_slice > index))
-        # case = self.cases[case_idx]
-        #
-        # # Slice selector
-        # slices = [0] + self.max_slice.tolist()
-        # patch_idx = index - slices[case_idx]
-        # case_slices = self.patch_slices[case_idx]
-
-        if index < len(self.patch_slices):
-            slice_i, case_idx = self.patch_slices[index]
+        # We'll "artificially" balance lesion and background for the target.
+        # lesions are a small fraction of the target dataset, but they are
+        # the most important voxels, so we want the network to properly
+        # model them in the target domain.
+        if index % 2 > 0:
+            flip = np.random.randint(2)
+            if flip:
+                t_index = np.random.randint(len(self.lesion_slices))
+                t_slice, t_case = self.lesion_slices[t_index]
+            else:
+                t_index = np.random.randint(len(self.current_lesion))
+                t_slice, t_case = self.current_lesion.pop(t_index)
+                if len(self.current_lesion) == 0:
+                    self.current_lesion = deepcopy(self.lesion_slices)
         else:
-            index = np.random.randint(len(self.current_bck))
-            slice_i, case_idx = self.current_bck.pop(index)
+            flip = False
+            t_index = np.random.randint(len(self.current_bck))
+            t_slice, t_case = self.current_bck.pop(t_index)
+            if len(self.current_bck) == 0:
+                self.current_bck = deepcopy(self.bck_slices)
+        s_slice, s_case = self.source_slices[index]
+
+        source = self.source[s_case]
+        source_mask = self.masks_source[s_case]
+        target = self.target[t_case]
+        target_mask = self.masks_target[t_case]
+        labels = self.labels[t_case]
+        none_slice = (slice(None, None),)
+        # Patch "extraction".
+        source_data = (
+            source[none_slice + s_slice].astype(np.float32),
+            np.expand_dims(source_mask[s_slice], axis=0),
+        )
+
+        target_data = (
+            target[none_slice + t_slice].astype(np.float32),
+            np.expand_dims(target_mask[t_slice], axis=0),
+            labels[t_slice]
+        )
+        if flip:
+            target_data = (
+                np.fliplr(target_data[0]).copy(),
+                np.fliplr(target_data[1]).copy(),
+                np.flipud(target_data[2]).copy()
+            )
+
+        return source_data, target_data
+
+    def __len__(self):
+        return len(self.source_slices)
+
+
+class RLCroppingDataset(Dataset):
+    def __init__(
+            self,
+            source, target, masks_source, masks_target, labels, patch_size=32,
+            overlap=0
+    ):
+        # Init
+        if type(patch_size) is not tuple:
+            self.patch_size = (patch_size,) * 3
+        else:
+            self.patch_size = patch_size
+        if type(overlap) is not tuple:
+            self.overlap = (overlap,) * 3
+        else:
+            self.overlap = overlap
+
+        self.source = source
+        self.target = target
+        self.masks_source = masks_source
+        self.masks_target = masks_target
+        self.labels = labels
+
+        # We get the patch slices (inside the bounding box)...
+        self.source_allslices = get_slices(
+            self.masks_source, self.patch_size, self.overlap
+        )
+        t_slices = get_slices(self.masks_target, self.patch_size, self.overlap)
+
+        # ... however, being inside the bounding box doesn't guarantee that the
+        # patch itself will contain any lesion voxels. Since, the lesion class
+        # is extremely underrepresented, we will filter this preliminary slices
+        # to guarantee that we only keep the ones that contain at least one
+        # lesion voxel.
+        self.lesion_slices = [
+            (s, i) for i, (label, s_i) in enumerate(zip(self.labels, t_slices))
+            for s in s_i if np.sum(label[s]) > 0
+        ]
+        self.bck_slices = [
+            (s, i) for i, (label, s_i) in enumerate(zip(self.labels, t_slices))
+            for s in s_i if np.sum(label[s]) == 0
+        ]
+        self.current_bck = deepcopy(self.bck_slices)
+        self.source_slices = [deepcopy(s) for s in self.source_allslices]
+        self.current_source = list(range(len(self.source)))
+        # self.curent_source = deepcopy(self.source_slices)
+
+    def __getitem__(self, index):
+        # We'll "artificially" balance lesion and background for the target.
+        # lesions are a small fraction of the target dataset, but they are
+        # the most important voxels, so we want the network to properly
+        # model them in the target domain.
+        flip = False
+        if index < (2 * len(self.lesion_slices)):
+            flip = index >= len(self.lesion_slices)
+            if flip:
+                index -= len(self.lesion_slices)
+            t_slice, t_case = self.lesion_slices[index]
+        else:
+            t_index = np.random.randint(len(self.current_bck))
+            t_slice, t_case = self.current_bck.pop(t_index)
             if len(self.current_bck) == 0:
                 self.current_bck = deepcopy(self.bck_slices)
 
-        case = self.cases[case_idx]
+        sc_index = np.random.randint(len(self.current_source))
+        s_case = self.current_source.pop(sc_index)
+        if len(self.current_source) == 0:
+            self.current_source = list(range(len(self.source)))
+        case_slices = self.source_slices[s_case]
+        ss_index = np.random.randint(len(case_slices))
+        s_slice = case_slices.pop(ss_index)
+        if len(case_slices) == 0:
+            self.source_slices[s_case] = deepcopy(
+                self.source_allslices[s_case]
+            )
 
-        # We get the slice indexes
+        source = self.source[s_case]
+        source_mask = self.masks_source[s_case]
+        target = self.target[t_case]
+        target_mask = self.masks_target[t_case]
+        labels = self.labels[t_case]
         none_slice = (slice(None, None),)
-        # slice_i = case_slices[patch_idx]
-
         # Patch "extraction".
-        data = case[none_slice + slice_i].astype(np.float32)
-        labels = self.labels[case_idx].astype(np.uint8)
+        source_data = (
+            source[none_slice + s_slice].astype(np.float32),
+            np.expand_dims(source_mask[s_slice], axis=0),
+        )
 
-        # We expand the labels to have 1 "channel". This is tricky depending
-        # on the loss function (some require channels, some don't).
-        target = np.expand_dims(labels[slice_i], 0)
+        target_data = (
+            target[none_slice + t_slice].astype(np.float32),
+            np.expand_dims(target_mask[t_slice], axis=0),
+            labels[t_slice]
+        )
+        if flip:
+            target_data = (
+                np.fliplr(target_data[0]).copy(),
+                np.fliplr(target_data[1]).copy(),
+                np.flipud(target_data[2]).copy()
+            )
 
-        return data, target
+        return source_data, target_data
 
     def __len__(self):
-        return self.max_slice[-1]
+        return len(self.lesion_slices) * 4
+
+
+class DualCroppingDataset(Dataset):
+    def __init__(
+            self,
+            source, target, masks_source, masks_target, labels, patch_size=32,
+            overlap=0
+    ):
+        # Init
+        if type(patch_size) is not tuple:
+            self.patch_size = (patch_size,) * 3
+        else:
+            self.patch_size = patch_size
+        if type(overlap) is not tuple:
+            self.overlap = (overlap,) * 3
+        else:
+            self.overlap = overlap
+
+        self.source = source
+        self.target = target
+        self.masks_source = masks_source
+        self.masks_target = masks_target
+        self.labels = labels
+
+        # We get the patch slices (inside the bounding box)...
+        s_slices = get_slices(self.masks_source, self.patch_size, self.overlap)
+        t_slices = get_slices(self.masks_target, self.patch_size, self.overlap)
+
+        # ... however, being inside the bounding box doesn't guarantee that the
+        # patch itself will contain any lesion voxels. Since, the lesion class
+        # is extremely underrepresented, we will filter this preliminary slices
+        # to guarantee that we only keep the ones that contain at least one
+        # lesion voxel.
+        self.lesion_slices = [
+            (s, i) for i, (label, s_i) in enumerate(zip(self.labels, t_slices))
+            for s in s_i if np.sum(label[s]) > 0
+        ]
+        self.bck_slices = [
+            (s, i) for i, (label, s_i) in enumerate(zip(self.labels, t_slices))
+            for s in s_i if np.sum(label[s]) == 0
+        ]
+        self.current_bck = deepcopy(self.bck_slices)
+        self.source_slices = [
+            (s, i) for i, s_i in enumerate(s_slices) for s in s_i
+        ]
+
+    def __getitem__(self, index):
+        flip = False
+        if index < len(self.source_slices):
+            slice_i, case = self.curent_source[index]
+            data = self.source[case]
+            labels = np.zeros(data.shape[1:])
+            target = False
+        else:
+            index -= len(self.source_slices)
+            # We'll "artificially" balance lesion and background for the target.
+            # lesions are a small fraction of the target dataset, but they are
+            # the most important voxels, so we want the network to properly
+            # model them in the target domain.
+            if index < (2 * len(self.lesion_slices)):
+                flip = index >= len(self.lesion_slices)
+                if flip:
+                    index -= len(self.lesion_slices)
+                slice_i, case = self.lesion_slices[index]
+            else:
+                index = np.random.randint(len(self.current_bck))
+                slice_i, case = self.current_bck.pop(index)
+                if len(self.current_bck) == 0:
+                    self.current_bck = deepcopy(self.bck_slices)
+            data = self.target[case]
+            labels = self.labels[case]
+            target = True
+
+        none_slice = (slice(None, None),)
+        # Patch "extraction".
+        patch = data[none_slice + slice_i].astype(np.float32)
+        y = labels[slice_i]
+        if flip:
+            patch = np.fliplr(patch).copy()
+            y = np.fliplr(y).copy()
+
+        return patch, y, target
+
+    def __len__(self):
+        return len(self.lesion_slices) * 4 + len(self.source_slices)
+
