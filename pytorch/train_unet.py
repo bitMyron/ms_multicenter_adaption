@@ -21,7 +21,7 @@ from tools.lesion_metrics import get_lesion_metrics
 from data_manipulation.utils import get_bb
 
 def cross_train_test(
-        args, patch_size=(32, 32, 32), images=None, filters=None,
+        args, patch_size=32, images=None, filters=None,
         batch_size=16, verbose=0, n_fold=5, task=None
 ):
     # Init
@@ -35,12 +35,12 @@ def cross_train_test(
         # filters = [32, 64, 128, 256]
         filters = [32, 64, 128, 256, 512]
     if patch_size is None:
-        patch_size = (32, 32, 32)
-    try:
-        overlap = tuple([p // 2 for p in patch_size])
-    except TypeError:
-        overlap = (patch_size // 2,) * 3
-        patch_size = (patch_size,) * 3
+        patch_size = 32
+    # try:
+    #     overlap = tuple([p // 2 for p in patch_size])
+    # except TypeError:
+    #     overlap = (patch_size // 2,) * 3
+    #     patch_size = (patch_size,) * 3
 
     if args['task']:
         task = args['task']
