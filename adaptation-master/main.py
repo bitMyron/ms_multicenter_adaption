@@ -630,7 +630,7 @@ def general_analysis(net, data, suffix='baseline', model_name=None, verbose=0):
 
 def train(
         net, model_name, patient_dicts, val_split=0.1, model_type='Unet',
-        source=None, verbose=0
+        source=None, verbose=0, d_path=None
 ):
     """
 
@@ -650,7 +650,7 @@ def train(
     patience = options['patience']
     batch_size = options['batch_size']
     patch_size = options['patch_size']
-    d_path = options['visms_dir']
+    # d_path = options['visms_dir']
 
     try:
         net.load_model(os.path.join(d_path, model_name))
@@ -1014,7 +1014,7 @@ def baseline_msseg(test_enabled=False, verbose=0):
                 )
             )
         train(
-            unet, model_name, train_dicts, verbose=verbose
+            unet, model_name, train_dicts, verbose=verbose, d_path=d_path
         )
 
         if test_enabled:
