@@ -40,6 +40,7 @@ def get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, patien
                     tp, gt_d, lesion_s, gt_s, pdsc
                 )
             )
+        return dscv
     else:
         sizes = [3, 11, 51]
         tpf, fpf, dscd, dscs = analysis_by_sizes(gt_lesion_mask, lesion_unet, sizes)

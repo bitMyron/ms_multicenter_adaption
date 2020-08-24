@@ -42,6 +42,17 @@ def cross_train_test(
     #     overlap = (patch_size // 2,) * 3
     #     patch_size = (patch_size,) * 3
 
+    filters_grid = [
+                    [32, 64, 128, 256],
+                    [32, 128, 256, 1024],
+                    [32, 64, 128, 256, 512],
+                    [32, 64, 128, 256, 1024]
+                    ]
+
+    dropout_grid = [0, 0.1, 0.25, 0.5, 0.75]
+
+    patch_size_grid = [16, 32, 64]
+
     if args['task']:
         task = args['task']
     if d_path is None:
@@ -51,6 +62,8 @@ def cross_train_test(
         metric_file = open(os.path.join(o_path, args['metric_file']), 'w')
     else:
         metric_file = None
+    grid_search_file = open(os.path.join(o_path, 'grid_result.csv', 'w'))
+
     epochs = args['epochs']
     patience = args['patience']
     num_workers = 4
@@ -80,6 +93,9 @@ def cross_train_test(
     spacing = dict(example_nii.header.items())['pixdim'][1:4]
 
     # Cross train and test
+    for filters, dropout, patch_size in zip(filters_grid, dropout_grid, patch_size_grid):
+        continue
+
     for i in range(len(cv_indexs)):
 
         # Save each cv model and test results indexed
@@ -163,7 +179,7 @@ def cross_train_test(
                         '\033[K{:}CUDA RAM error - '
                         )
                 seg_bb = seg_net.patch_lesions(
-                    test_brain, patch_size=patch_size[0]*2,
+                    test_brain, patch_size=patch_size *2,
                     verbose=verbose
                 )
 
@@ -190,7 +206,7 @@ def cross_train_test(
                 )
             )
 
-            get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
+            test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
 
         seg_net.save_model(os.path.join(cv_path, model_name))
 
