@@ -275,6 +275,18 @@ class LesionsUNet(BaseModel):
         super().dropout_update()
         self.autoencoder.dropout = self.dropout
 
+    def target_pass(self, target):
+        # Pass to latent space
+        z_target = self.target_encoder(target)
+        # Sampling
+        sample_target = gaussian_sample(z_target, sample=self.training)
+        # Fake data
+        r_target = self.target_decoder(sample_target)
+        # Segmentation in the latest space
+        seg = self.segmenter(z_target)
+
+        return z_target, r_target, seg
+
     def lesions(
             self,
             data,
@@ -299,7 +311,7 @@ class LesionsUNet(BaseModel):
         return seg
 
     def patch_lesions(
-            self, data, patch_size=32, batch_size=512, source=True,
+            self, data, patch_size=32, batch_size=16, source=True,
             verbose=1
     ):
         # Init

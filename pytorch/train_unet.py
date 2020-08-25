@@ -162,8 +162,8 @@ def cross_train_test(
         for test_case_idx in range(len(p_test)):
             test_brain = d_test[test_case_idx]
             gt_lesion_mask = l_test[test_case_idx]
-            test_brain_mask = m_test[test_case_idx]
-            bb = get_bb(test_brain_mask)
+            # test_brain_mask = m_test[test_case_idx]
+            # bb = get_bb(test_brain_mask)
 
             # seg_im = np.zeros_like(gt_lesion_mask)
             # seg_bb = seg_net.lesions(test_brain)
