@@ -99,6 +99,7 @@ def cross_train_test(
 
         # Cross train and test
         test_dscs = []
+        val_dscs = []
         for i in range(len(cv_indexs)):
 
             # Save each cv model and test results indexed
@@ -161,6 +162,39 @@ def cross_train_test(
                 patience=patience,
                 verbose=verbose
             )
+
+            for val_case_idx in range(len(d_val)):
+                test_brain = d_val[val_case_idx]
+                gt_lesion_mask = l_val[val_case_idx]
+                try:
+                    seg_bb = seg_net.lesions(
+                        test_brain, verbose=verbose
+                    )
+                except RuntimeError:
+                    if verbose > 0:
+                        print(
+                            '\033[K{:}CUDA RAM error - '
+                            )
+                    seg_bb = seg_net.patch_lesions(
+                        test_brain, patch_size=patch_size *2,
+                        verbose=verbose
+                    )
+
+                if len(seg_bb.shape) > 3:
+                    seg_im = np.argmax(seg_bb, axis=0) + 1
+                else:
+                    seg_im = seg_bb > 0.5
+
+                # seg_im[np.logical_not(bb)] = 0
+                # seg_bin = np.argmax(seg, axis=0).astype(np.bool)
+                # # lesion_unet = remove_small_regions(seg_bin)
+                # lesion_unet = seg_bin
+
+                lesion_unet = seg_im
+                test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
+                val_dscs.append(test_case_dsc)
+                print("%s\n" % str(test_case_dsc))
+
 
             for test_case_idx in range(len(p_test)):
                 test_brain = d_test[test_case_idx]
@@ -227,7 +261,9 @@ def cross_train_test(
                     '%sTraining finished%s (total time %s)\n' %
                     (c['r'], c['nc'], time_str)
                 )
-        grid_search_file.write("%s;%s;%s;%s\n" % (str(filters), str(dropout), str(patch_size), str(sum(test_dscs)/len(test_dscs))))
+        grid_search_file.write("%s;%s;%s;%s;%s\n" % (str(filters), str(dropout), str(patch_size),
+                                                     str(sum(val_dscs) / len(val_dscs)),
+                                                     str(sum(test_dscs)/len(test_dscs))))
         metric_file.close()
     grid_search_file.close()
 
