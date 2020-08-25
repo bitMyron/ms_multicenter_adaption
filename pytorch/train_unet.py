@@ -51,7 +51,7 @@ def cross_train_test(
 
     dropout_grid = [0, 0.1, 0.25, 0.5, 0.75]
 
-    patch_size_grid = [16, 32, 64]
+    patch_size_grid = [16, 32]
 
     if args['task']:
         task = args['task']
@@ -92,143 +92,143 @@ def cross_train_test(
 
     spacing = dict(example_nii.header.items())['pixdim'][1:4]
 
-    # Cross train and test
-    # for filters, dropout, patch_size in zip(filters_grid, dropout_grid, patch_size_grid):
-    #     continue
+    # Grid search
+    for filters, dropout, patch_size in zip(filters_grid, dropout_grid, patch_size_grid):
 
+        print("Grid search with: %s;%s;%s\n" % (str(filters), str(dropout), str(patch_size)))
 
+        # Cross train and test
+        test_dscs = []
+        for i in range(len(cv_indexs)):
 
-    test_dscs = []
-    for i in range(len(cv_indexs)):
+            # Save each cv model and test results indexed
+            cv_path = os.path.join(o_path, str(i))
+            if not os.path.isdir(cv_path):
+                os.mkdir(cv_path)
 
-        # Save each cv model and test results indexed
-        cv_path = os.path.join(o_path, str(i))
-        if not os.path.isdir(cv_path):
-            os.mkdir(cv_path)
+            d_train = [tr_data[tmpi] for tmpi in cv_indexs[i]['train_index']]
+            l_train = [tr_lesions[tmpi] for tmpi in cv_indexs[i]['train_index']]
+            m_train = [tr_brains[tmpi] for tmpi in cv_indexs[i]['train_index']]
 
-        d_train = [tr_data[tmpi] for tmpi in cv_indexs[i]['train_index']]
-        l_train = [tr_lesions[tmpi] for tmpi in cv_indexs[i]['train_index']]
-        m_train = [tr_brains[tmpi] for tmpi in cv_indexs[i]['train_index']]
+            d_val = [tr_data[tmpi] for tmpi in cv_indexs[i]['val_index']]
+            l_val = [tr_lesions[tmpi] for tmpi in cv_indexs[i]['val_index']]
+            m_val = [tr_brains[tmpi] for tmpi in cv_indexs[i]['val_index']]
 
-        d_val = [tr_data[tmpi] for tmpi in cv_indexs[i]['val_index']]
-        l_val = [tr_lesions[tmpi] for tmpi in cv_indexs[i]['val_index']]
-        m_val = [tr_brains[tmpi] for tmpi in cv_indexs[i]['val_index']]
+            d_test = [tr_data[tmpi] for tmpi in cv_indexs[i]['test_index']]
+            l_test = [tr_lesions[tmpi] for tmpi in cv_indexs[i]['test_index']]
+            m_test = [tr_brains[tmpi] for tmpi in cv_indexs[i]['test_index']]
+            p_test = [p_trains[tmpi] for tmpi in cv_indexs[i]['test_index']]
 
-        d_test = [tr_data[tmpi] for tmpi in cv_indexs[i]['test_index']]
-        l_test = [tr_lesions[tmpi] for tmpi in cv_indexs[i]['test_index']]
-        m_test = [tr_brains[tmpi] for tmpi in cv_indexs[i]['test_index']]
-        p_test = [p_trains[tmpi] for tmpi in cv_indexs[i]['test_index']]
-
-        # Initialize unet model
-        seg_net = LesionsUNet(
-            conv_filters=filters, n_images=len(images), dropout=dropout
-        )
-
-
-        train_dataset = LesionCroppingDataset(
-            d_train, l_train, m_train, patch_size, patch_size // 2,
-        )
-        # Prepare train/val dataloader
-        # train_dataset = LoadLesionCroppingDataset(
-        #     d_train, l_train, m_train, patch_size, overlap,
-        #     verbose=verbose
-        # )
-        train_dataloader = DataLoader(
-            train_dataset, batch_size, True, num_workers=num_workers
-        )
-        val_dataset = LesionCroppingDataset(
-            d_val, l_val, m_val, patch_size * 2, 0, filtered=False,
-        )
-
-        val_dataloader = DataLoader(
-            val_dataset, batch_size, num_workers=num_workers
-        )
-
-        if verbose > 0:
-            n_params = sum(
-                p.numel() for p in seg_net.parameters() if p.requires_grad
-            )
-            print(
-                '%sStarting training with a unet%s (%s%d%s parameters)' %
-                (c['c'], c['nc'], c['b'], n_params, c['nc'])
+            # Initialize unet model
+            seg_net = LesionsUNet(
+                conv_filters=filters, n_images=len(images), dropout=dropout
             )
 
-        # And all that's left is to train and save the model.
-        seg_net.fit(
-            train_dataloader,
-            val_dataloader,
-            epochs=epochs,
-            patience=patience,
-            verbose=verbose
-        )
 
-        for test_case_idx in range(len(p_test)):
-            test_brain = d_test[test_case_idx]
-            gt_lesion_mask = l_test[test_case_idx]
-            # test_brain_mask = m_test[test_case_idx]
-            # bb = get_bb(test_brain_mask)
+            train_dataset = LesionCroppingDataset(
+                d_train, l_train, m_train, patch_size, patch_size // 2,
+            )
+            # Prepare train/val dataloader
+            # train_dataset = LoadLesionCroppingDataset(
+            #     d_train, l_train, m_train, patch_size, overlap,
+            #     verbose=verbose
+            # )
+            train_dataloader = DataLoader(
+                train_dataset, batch_size, True, num_workers=num_workers
+            )
+            val_dataset = LesionCroppingDataset(
+                d_val, l_val, m_val, patch_size * 2, 0, filtered=False,
+            )
 
-            # seg_im = np.zeros_like(gt_lesion_mask)
-            # seg_bb = seg_net.lesions(test_brain)
+            val_dataloader = DataLoader(
+                val_dataset, batch_size, num_workers=num_workers
+            )
 
-
-            try:
-                seg_bb = seg_net.lesions(
-                    test_brain, verbose=verbose
+            if verbose > 0:
+                n_params = sum(
+                    p.numel() for p in seg_net.parameters() if p.requires_grad
                 )
-            except RuntimeError:
-                if verbose > 0:
-                    print(
-                        '\033[K{:}CUDA RAM error - '
-                        )
-                seg_bb = seg_net.patch_lesions(
-                    test_brain, patch_size=patch_size *2,
-                    verbose=verbose
+                print(
+                    '%sStarting training with a unet%s (%s%d%s parameters)' %
+                    (c['c'], c['nc'], c['b'], n_params, c['nc'])
                 )
 
-            if len(seg_bb.shape) > 3:
-                seg_im = np.argmax(seg_bb, axis=0) + 1
-            else:
-                seg_im = seg_bb > 0.5
-
-            # seg_im[np.logical_not(bb)] = 0
-            # seg_bin = np.argmax(seg, axis=0).astype(np.bool)
-            # # lesion_unet = remove_small_regions(seg_bin)
-            # lesion_unet = seg_bin
-
-            lesion_unet = seg_im
-
-            mask_nii = nib.Nifti1Image(
-                lesion_unet,
-                example_nii.get_qform(),
-                example_nii.get_header()
+            # And all that's left is to train and save the model.
+            seg_net.fit(
+                train_dataloader,
+                val_dataloader,
+                epochs=epochs,
+                patience=patience,
+                verbose=verbose
             )
-            if not os.path.isdir(os.path.join(cv_path, p_test[test_case_idx])):
-                os.mkdir(os.path.join(cv_path, p_test[test_case_idx]))
 
-            mask_nii.to_filename(
-                os.path.join(
-                    cv_path, p_test[test_case_idx], 'lesion_mask_{:}.nii.gz'.format(suffix)
+            for test_case_idx in range(len(p_test)):
+                test_brain = d_test[test_case_idx]
+                gt_lesion_mask = l_test[test_case_idx]
+                # test_brain_mask = m_test[test_case_idx]
+                # bb = get_bb(test_brain_mask)
+
+                # seg_im = np.zeros_like(gt_lesion_mask)
+                # seg_bb = seg_net.lesions(test_brain)
+
+
+                try:
+                    seg_bb = seg_net.lesions(
+                        test_brain, verbose=verbose
+                    )
+                except RuntimeError:
+                    if verbose > 0:
+                        print(
+                            '\033[K{:}CUDA RAM error - '
+                            )
+                    seg_bb = seg_net.patch_lesions(
+                        test_brain, patch_size=patch_size *2,
+                        verbose=verbose
+                    )
+
+                if len(seg_bb.shape) > 3:
+                    seg_im = np.argmax(seg_bb, axis=0) + 1
+                else:
+                    seg_im = seg_bb > 0.5
+
+                # seg_im[np.logical_not(bb)] = 0
+                # seg_bin = np.argmax(seg, axis=0).astype(np.bool)
+                # # lesion_unet = remove_small_regions(seg_bin)
+                # lesion_unet = seg_bin
+
+                lesion_unet = seg_im
+
+                mask_nii = nib.Nifti1Image(
+                    lesion_unet,
+                    example_nii.get_qform(),
+                    example_nii.get_header()
                 )
-            )
+                if not os.path.isdir(os.path.join(cv_path, p_test[test_case_idx])):
+                    os.mkdir(os.path.join(cv_path, p_test[test_case_idx]))
 
-            test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
-            test_dscs.append(test_case_dsc)
-            print("%s\n" % str(test_case_dsc))
+                mask_nii.to_filename(
+                    os.path.join(
+                        cv_path, p_test[test_case_idx], 'lesion_mask_{:}.nii.gz'.format(suffix)
+                    )
+                )
 
-        seg_net.save_model(os.path.join(cv_path, model_name))
+                test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
+                test_dscs.append(test_case_dsc)
+                print("%s\n" % str(test_case_dsc))
 
-        if verbose > 0:
-            time_str = time.strftime(
-                '%H hours %M minutes %S seconds',
-                time.gmtime(time.time() - training_start)
-            )
-            print(
-                '%sTraining finished%s (total time %s)\n' %
-                (c['r'], c['nc'], time_str)
-            )
-    grid_search_file.write("%s;%s;%s;%s\n" % (str(filters), str(dropout), str(patch_size), str(sum(test_dscs)/len(test_dscs))))
-    metric_file.close()
+            seg_net.save_model(os.path.join(cv_path, model_name))
+
+            if verbose > 0:
+                time_str = time.strftime(
+                    '%H hours %M minutes %S seconds',
+                    time.gmtime(time.time() - training_start)
+                )
+                print(
+                    '%sTraining finished%s (total time %s)\n' %
+                    (c['r'], c['nc'], time_str)
+                )
+        grid_search_file.write("%s;%s;%s;%s\n" % (str(filters), str(dropout), str(patch_size), str(sum(test_dscs)/len(test_dscs))))
+        metric_file.close()
     grid_search_file.close()
 
 
