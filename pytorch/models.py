@@ -311,7 +311,7 @@ class LesionsUNet(BaseModel):
         return seg
 
     def patch_lesions(
-            self, data, patch_size=32, batch_size=1, source=True,
+            self, data, patch_size=32, batch_size=16, source=True,
             verbose=1
     ):
         # Init
