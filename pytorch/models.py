@@ -311,6 +311,53 @@ class LesionsUNet(BaseModel):
         return seg
 
     def patch_lesions(
+            self,
+            data,
+            patch_size,
+            verbose=0
+    ):
+        # Init
+        self.eval()
+
+        seg = np.zeros((2,) + data.shape[1:])
+        # The following lines are just a complicated way of finding all
+        # the possible combinations of patch indices.
+        limits = tuple(
+            list(range(0, lim, patch_size))[:-1] + [lim - patch_size]
+            for lim in data.shape[1:]
+        )
+        limits_product = list(itertools.product(*limits))
+
+        # The following code is just a normal test loop with all the
+        # previously computed patches.
+        for patchi, (xi, xj, xk) in enumerate(limits_product):
+            # Here we just take the current patch defined by its slice
+            # in the x and y axes. Then we convert it into a torch
+            # tensor for testing.
+            xslice = slice(xi, xi + patch_size)
+            yslice = slice(xj, xj + patch_size)
+            zslice = slice(xk, xk + patch_size)
+            data_tensor = to_torch_var(
+                np.expand_dims(
+                    data[slice(None), xslice, yslice, zslice],
+                    axis=0
+                )
+            )
+            with torch.no_grad():
+                torch.cuda.synchronize(self.device)
+                seg_i = self(data_tensor)
+                torch.cuda.synchronize(self.device)
+                torch.cuda.empty_cache()
+                seg_i = seg_i.cpu().numpy()
+                seg[slice(None), xslice, yslice, zslice] = seg_i[0]
+
+        if verbose > 1:
+            print(
+                '\033[K{:}Segmentation finished'.format(' '.join([''] * 12))
+            )
+        return seg
+
+    def patch_lesions_com(
             self, data, patch_size=32, batch_size=16, source=True,
             verbose=1
     ):
