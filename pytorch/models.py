@@ -348,8 +348,8 @@ class LesionsUNet(BaseModel):
                 seg_i = self(data_tensor)
                 torch.cuda.synchronize(self.device)
                 torch.cuda.empty_cache()
-                seg_i = seg_i.cpu().numpy()
-                seg[slice(None), xslice, yslice, zslice] = seg_i[0]
+                seg_i = seg_i[0].cpu().numpy()
+                seg[slice(None), xslice, yslice, zslice] = seg_i
 
         if verbose > 1:
             print(
