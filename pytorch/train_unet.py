@@ -96,6 +96,9 @@ def cross_train_test(
     # for filters, dropout, patch_size in zip(filters_grid, dropout_grid, patch_size_grid):
     #     continue
 
+
+
+    test_dscs = []
     for i in range(len(cv_indexs)):
 
         # Save each cv model and test results indexed
@@ -202,11 +205,12 @@ def cross_train_test(
             )
             mask_nii.to_filename(
                 os.path.join(
-                    cv_path, 'lesion_mask_{:}.nii.gz'.format(suffix)
+                    cv_path, p_test[test_case_idx], 'lesion_mask_{:}.nii.gz'.format(suffix)
                 )
             )
 
             test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
+            test_dscs.append(test_case_dsc)
 
         seg_net.save_model(os.path.join(cv_path, model_name))
 
@@ -219,8 +223,9 @@ def cross_train_test(
                 '%sTraining finished%s (total time %s)\n' %
                 (c['r'], c['nc'], time_str)
             )
-
+    grid_search_file.write("%s;%s;%s;%s\n" % (str(filters), str(dropout), str(patch_size), str(sum(test_dscs)/len(test_dscs))))
     metric_file.close()
+    grid_search_file.close()
 
 
 # def train_net(
