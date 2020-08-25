@@ -191,7 +191,7 @@ def cross_train_test(
                 # lesion_unet = seg_bin
 
                 lesion_unet = seg_im
-                test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
+                test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, 'val'+str(val_case_idx), fold=i)
                 val_dscs.append(test_case_dsc)
                 print("%s\n" % str(test_case_dsc))
 
