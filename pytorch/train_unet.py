@@ -93,8 +93,8 @@ def cross_train_test(
     spacing = dict(example_nii.header.items())['pixdim'][1:4]
 
     # Cross train and test
-    for filters, dropout, patch_size in zip(filters_grid, dropout_grid, patch_size_grid):
-        continue
+    # for filters, dropout, patch_size in zip(filters_grid, dropout_grid, patch_size_grid):
+    #     continue
 
     for i in range(len(cv_indexs)):
 
@@ -165,7 +165,7 @@ def cross_train_test(
             test_brain_mask = m_test[test_case_idx]
             bb = get_bb(test_brain_mask)
 
-            seg_im = np.zeros_like(gt_lesion_mask)
+            # seg_im = np.zeros_like(gt_lesion_mask)
             # seg_bb = seg_net.lesions(test_brain)
 
 
@@ -184,11 +184,11 @@ def cross_train_test(
                 )
 
             if len(seg_bb.shape) > 3:
-                seg_im[bb] = np.argmax(seg_bb, axis=0) + 1
+                seg_im = np.argmax(seg_bb, axis=0) + 1
             else:
-                seg_im[bb] = seg_bb > 0.5
-            seg_im[np.logical_not(bb)] = 0
+                seg_im = seg_bb > 0.5
 
+            # seg_im[np.logical_not(bb)] = 0
             # seg_bin = np.argmax(seg, axis=0).astype(np.bool)
             # # lesion_unet = remove_small_regions(seg_bin)
             # lesion_unet = seg_bin
