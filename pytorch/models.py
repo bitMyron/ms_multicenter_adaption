@@ -310,53 +310,70 @@ class LesionsUNet(BaseModel):
 
         return seg
 
-
     def patch_lesions(
-            self,
-            data,
-            patch_size,
-            verbose=0
+            self, data, patch_size=32, batch_size=16, source=True,
+            verbose=1
     ):
         # Init
         self.eval()
 
-        seg = np.zeros((2,) + data.shape[1:])
+        seg = np.zeros(data.shape[1:])
+        counts = np.zeros(data.shape[1:])
         # The following lines are just a complicated way of finding all
         # the possible combinations of patch indices.
         limits = tuple(
-            list(range(0, lim, patch_size))[:-1] + [lim - patch_size]
+            list(range(0, lim - patch_size + 1))
             for lim in data.shape[1:]
         )
         limits_product = list(itertools.product(*limits))
 
+        t_in = time.time()
+        n_batches = int(np.ceil(len(limits_product) / batch_size))
         # The following code is just a normal test loop with all the
         # previously computed patches.
-        for patchi, (xi, xj, xk) in enumerate(limits_product):
-            # Here we just take the current patch defined by its slice
-            # in the x and y axes. Then we convert it into a torch
-            # tensor for testing.
-            xslice = slice(xi, xi + patch_size)
-            yslice = slice(xj, xj + patch_size)
-            zslice = slice(xk, xk + patch_size)
-            data_tensor = to_torch_var(
-                np.expand_dims(
-                    data[slice(None), xslice, yslice, zslice],
-                    axis=0
-                )
-            )
+        for i, batch_i in enumerate(range(0, len(limits_product), batch_size)):
+            patches = limits_product[batch_i:batch_i + batch_size]
+            patch_list = [
+                data[:, xi:xi + patch_size, xj:xj + patch_size, xk:xk + patch_size]
+                for xi, xj, xk in patches
+            ]
+            data_tensor = to_torch_var(np.stack(patch_list, axis=0))
             with torch.no_grad():
-                torch.cuda.synchronize(self.device)
-                seg_i = self(data_tensor)
-                torch.cuda.synchronize(self.device)
+                if source:
+                    out = self(data_tensor)
+                else:
+                    _, _, out = self.target_pass(data_tensor)
                 torch.cuda.empty_cache()
-                seg_i = seg_i.cpu().numpy()
-                seg[slice(None), xslice, yslice, zslice] = seg_i[0]
+                print(out.size())
+                for pi, (xi, xj, xk) in enumerate(patches):
+                    seg_i = out[pi].cpu().numpy()
+                    xslice = slice(xi, xi + patch_size)
+                    yslice = slice(xj, xj + patch_size)
+                    zslice = slice(xk, xk + patch_size)
+                    seg[xslice, yslice, zslice] += np.squeeze(seg_i)
+                    counts[xslice, yslice, zslice] += 1
 
+            if verbose > 0:
+                percent = 20 * (i + 1) // n_batches
+                progress_s = ''.join(['-'] * percent)
+                remainder_s = ''.join([' '] * (20 - percent))
+
+                t_out = time.time() - t_in
+                time_s = time_to_string(t_out)
+
+                t_eta = (t_out / (i + 1)) * (n_batches - (i + 1))
+                eta_s = time_to_string(t_eta)
+                batch_s = '\033[KBatch {:03d}/{:03d}  ' \
+                          '[{:}>{:}] {:} ETA: {:}'.format(
+                    i + 1, n_batches,
+                    progress_s, remainder_s, time_s, eta_s
+                )
+                print(batch_s, end='\r', flush=True)
         if verbose > 1:
             print(
                 '\033[K{:}Segmentation finished'.format(' '.join([''] * 12))
             )
-        return seg
+        return seg / counts
 
 class DomainAdapter(BaseModel):
     def __init__(
