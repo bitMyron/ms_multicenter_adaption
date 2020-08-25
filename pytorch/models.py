@@ -311,7 +311,7 @@ class LesionsUNet(BaseModel):
         return seg
 
     def patch_lesions(
-            self, data, patch_size=32, batch_size=16, source=True,
+            self, data, patch_size=32, batch_size=1, source=True,
             verbose=1
     ):
         # Init
@@ -344,8 +344,9 @@ class LesionsUNet(BaseModel):
                 else:
                     _, _, out = self.target_pass(data_tensor)
                 torch.cuda.empty_cache()
+                print(out)
                 for pi, (xi, xj, xk) in enumerate(patches):
-                    seg_i = out[pi].cpu().numpy()
+                    seg_i = out[0][pi].cpu().numpy()
                     xslice = slice(xi, xi + patch_size)
                     yslice = slice(xj, xj + patch_size)
                     zslice = slice(xk, xk + patch_size)
