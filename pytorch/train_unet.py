@@ -203,6 +203,9 @@ def cross_train_test(
                 example_nii.get_qform(),
                 example_nii.get_header()
             )
+            if not os.path.isdir(os.path.join(cv_path, p_test[test_case_idx])):
+                os.mkdir(os.path.join(cv_path, p_test[test_case_idx]))
+
             mask_nii.to_filename(
                 os.path.join(
                     cv_path, p_test[test_case_idx], 'lesion_mask_{:}.nii.gz'.format(suffix)
@@ -211,6 +214,7 @@ def cross_train_test(
 
             test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_test[test_case_idx], fold=i)
             test_dscs.append(test_case_dsc)
+            print("%s\n" % str(test_case_dsc))
 
         seg_net.save_model(os.path.join(cv_path, model_name))
 
