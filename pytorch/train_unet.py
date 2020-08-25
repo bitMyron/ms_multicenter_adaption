@@ -62,7 +62,7 @@ def cross_train_test(
         metric_file = open(os.path.join(o_path, args['metric_file']), 'w')
     else:
         metric_file = None
-    grid_search_file = open(os.path.join(o_path, 'grid_result.csv', 'w'))
+    grid_search_file = open(os.path.join(o_path, 'grid_result.csv'), 'w')
 
     epochs = args['epochs']
     patience = args['patience']
