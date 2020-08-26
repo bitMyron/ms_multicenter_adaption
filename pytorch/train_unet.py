@@ -50,7 +50,6 @@ def cross_train_test(
 
     dropout_grid = [0, 0.1, 0.25, 0.5, 0.75]
 
-    patch_size_grid = [16]
 
     if args['task']:
         task = args['task']
@@ -92,7 +91,7 @@ def cross_train_test(
     spacing = dict(example_nii.header.items())['pixdim'][1:4]
 
     # Grid search
-    for filters, dropout, patch_size in zip(filters_grid, dropout_grid, patch_size_grid):
+    for filters, dropout in zip(filters_grid, dropout_grid):
 
         print("Grid search with: %s;%s;%s\n" % (str(filters), str(dropout), str(patch_size)))
 
@@ -223,6 +222,7 @@ def cross_train_test(
                     seg_im = np.argmax(seg_bb, axis=0) + 1
                 else:
                     seg_im = seg_bb > 0.5
+                remove_small_regions(seg_im == 1)
 
                 # seg_im[np.logical_not(bb)] = 0
                 # seg_bin = np.argmax(seg, axis=0).astype(np.bool)
