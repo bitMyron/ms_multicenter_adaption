@@ -45,13 +45,12 @@ def cross_train_test(
     filters_grid = [
                     [32, 64, 128, 256],
                     [32, 128, 256, 1024],
-                    [32, 64, 128, 256, 512],
-                    [32, 64, 128, 256, 1024]
+                    [32, 64, 128, 256, 512]
                     ]
 
     dropout_grid = [0, 0.1, 0.25, 0.5, 0.75]
 
-    patch_size_grid = [16, 32]
+    patch_size_grid = [16]
 
     if args['task']:
         task = args['task']
