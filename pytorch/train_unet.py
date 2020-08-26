@@ -263,7 +263,7 @@ def cross_train_test(
         grid_search_file.write("%s;%s;%s;%s;%s\n" % (str(filters), str(dropout), str(patch_size),
                                                      str(sum(val_dscs) / len(val_dscs)),
                                                      str(sum(test_dscs)/len(test_dscs))))
-        metric_file.close()
+    metric_file.close()
     grid_search_file.close()
 
 
