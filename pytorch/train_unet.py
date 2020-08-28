@@ -19,6 +19,7 @@ from tools.lesion_manipulation import (
 )
 from tools.lesion_metrics import get_lesion_metrics
 from data_manipulation.utils import get_bb
+import torch
 
 def cross_train_test(
         args, patch_size=32, images=None, filters=None,
@@ -263,6 +264,7 @@ def cross_train_test(
         grid_search_file.write("%s;%s;%s;%s;%s\n" % (str(filters), str(dropout), str(patch_size),
                                                      str(sum(val_dscs) / len(val_dscs)),
                                                      str(sum(test_dscs)/len(test_dscs))))
+        torch.cuda.empty_cache()
     metric_file.close()
     grid_search_file.close()
 
