@@ -20,6 +20,7 @@ from tools.lesion_manipulation import (
 from tools.lesion_metrics import get_lesion_metrics
 from data_manipulation.utils import get_bb
 import torch
+import itertools
 
 def cross_train_test(
         args, patch_size=32, images=None, filters=None,
@@ -92,7 +93,7 @@ def cross_train_test(
     spacing = dict(example_nii.header.items())['pixdim'][1:4]
 
     # Grid search
-    for filters, dropout in zip(filters_grid, dropout_grid):
+    for filters, dropout in list(itertools.product(filters_grid, dropout_grid)):
 
         print("Grid search with: %s;%s;%s\n" % (str(filters), str(dropout), str(patch_size)))
 
