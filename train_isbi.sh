@@ -18,5 +18,5 @@ CUDA_VISIBLE_DEVICES=2,3
 # The weights are defined on the function test_folder (line 654 main.py) and take into account the images.
 # By default it's FLAIR+T1.
 [ -e nohup.out ] && rm nohup.out
-nohup python main.py -d /home/mayang/data/ISBI2015 -o /home/mayang/data/output/ISBI2015 -t isbi -m metrics.csv --run_cross_train --dropout 0.5 &
+nohup python main.py -d /home/mayang/data/ISBI2015 -o /home/mayang/data/output/ISBI2015 -t isbi -m metrics.csv --run_cross_train --dropout 0 --epochs 20 --patience 5 &
 
