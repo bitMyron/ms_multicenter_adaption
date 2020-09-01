@@ -372,7 +372,51 @@ def get_case(
             axis=0
         )
 
+    assert isinstance(spacing, object)
     return norm_data, brain, lesion, spacing
+
+def get_case_seperate_addr(
+        d_file_path=None,
+        bm_file_path=None,
+        lm_file_path=None,
+        verbose=1,
+):
+    """
+        Function that loads the images and masks of a patient.
+        :param d_file_path: Path to the image data (list of different modilities).
+        :param bm_file_path: Path to the brain mask.
+        :param lm_file_path: Path to the lesion mask.
+        :param verbose: Level of verbosity
+        :return: numpy array for the concatenated images, lesion mask and brain mask.
+    """
+    # Similarly to the get_data function, here we need to load just one case
+    # (for testing). However, we can't assume that we will have a lesion mask,
+    # so we will only load the images and a brain mask.
+    # Brain mask
+    if verbose > 1:
+        print('Loading the brain mask')
+    brain = get_mask(bm_file_path)
+    if lm_file_path:
+        lesion = get_mask(lm_file_path)
+    else:
+        lesion = None
+
+    # Get basic nii info and nii example
+    gt_nii = load_nii(bm_file_path)
+    spacing = dict(gt_nii.header.items())['pixdim'][1:4]
+
+    # get mri image data under brain mask
+    norm_data = np.stack(
+        [
+            get_normalised_image(
+                os.path.join(im_file),
+                brain,
+            ) for im_file in d_file_path
+        ],
+        axis=0
+    )
+
+    return norm_data, brain, lesion, spacing, gt_nii
 
 
 def cross_validation_split(set_size, n_fold=5, val_test_ratio=1. / 3.):
