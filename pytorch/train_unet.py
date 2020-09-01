@@ -180,17 +180,15 @@ def cross_train_test(
                         verbose=verbose
                     )
 
-                if len(seg_bb.shape) > 3:
-                    seg_im = np.argmax(seg_bb, axis=0) + 1
-                else:
-                    seg_im = seg_bb > 0.5
+                # Use thresholding to get binary lesion mask
+                # if len(seg_bb.shape) > 3:
+                #     seg_im = np.argmax(seg_bb, axis=0) + 1
+                # else:
+                #     seg_im = seg_bb > 0.5
+                seg_im = seg_bb > 0.5
+                seg_im = seg_im.astype(int)
+                lesion_unet = remove_small_regions(seg_im == 1)
 
-                # seg_im[np.logical_not(bb)] = 0
-                # seg_bin = np.argmax(seg, axis=0).astype(np.bool)
-                # # lesion_unet = remove_small_regions(seg_bin)
-                # lesion_unet = seg_bin
-
-                lesion_unet = seg_im
                 test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, 'val'+str(val_case_idx), fold=i)
                 val_dscs.append(test_case_dsc)
                 print("%s\n" % str(test_case_dsc))

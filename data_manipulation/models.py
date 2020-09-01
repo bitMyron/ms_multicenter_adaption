@@ -441,8 +441,10 @@ class BaseModel(nn.Module):
         torch.save(self.state_dict(), net_name)
 
     def load_model(self, net_name):
-        self.load_state_dict(torch.load(net_name))
-
+        if not torch.cuda.is_available():
+            self.load_state_dict(torch.load(net_name, map_location=torch.device('cpu')))
+        else:
+            self.load_state_dict(torch.load(net_name))
 
 class Autoencoder(BaseModel):
     """

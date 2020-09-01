@@ -299,7 +299,8 @@ class LesionsUNet(BaseModel):
 
         with torch.no_grad():
             seg, _ = self(data_tensor)
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         if verbose > 1:
             print(
@@ -319,7 +320,7 @@ class LesionsUNet(BaseModel):
         # Init
         self.eval()
 
-        seg = np.zeros((2,) + data.shape[1:])
+        seg = np.zeros(data.shape[1:])
         # The following lines are just a complicated way of finding all
         # the possible combinations of patch indices.
         limits = tuple(
@@ -343,13 +344,19 @@ class LesionsUNet(BaseModel):
                     axis=0
                 )
             )
-            with torch.no_grad():
-                torch.cuda.synchronize(self.device)
-                seg_i = self(data_tensor)
-                torch.cuda.synchronize(self.device)
-                torch.cuda.empty_cache()
-                seg_i = seg_i[0].cpu().numpy()
-                seg[slice(None), xslice, yslice, zslice] = seg_i
+            if torch.cuda.is_available():
+                with torch.no_grad():
+                    torch.cuda.synchronize(self.device)
+                    seg_i, _ = self(data_tensor)
+                    torch.cuda.synchronize(self.device)
+                    seg_i = seg_i.cpu().numpy()
+                    torch.cuda.empty_cache()
+                    seg[xslice, yslice, zslice] = seg_i
+            else:
+                with torch.no_grad():
+                    seg_i, _ = self(data_tensor)
+                    seg_i = seg_i.cpu().numpy()
+                    seg[xslice, yslice, zslice] = seg_i
 
         if verbose > 1:
             print(

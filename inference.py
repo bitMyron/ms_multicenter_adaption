@@ -37,31 +37,31 @@ def parse_args():
     parser.add_argument(
         '-d', '--datafile-path',
         dest='datafile_path',
-        default='/home/mariano/SNAC_Lesion_ID_Proj_all',
+        default='/home/yangma/1/07003SATH/FLAIR_preprocessed.nii.gz;/home/yangma/1/07003SATH/T1_preprocessed.nii.gz',
         help='Parameter to store the working directory.'
     )
     parser.add_argument(
         '-b', '--brainmask-path',
         dest='brainmask_path',
-        default='/home/mariano/SNAC_Lesion_ID_Proj_all',
+        default='/home/yangma/1/07003SATH/Mask_registered.nii.gz',
         help='Parameter to store the working directory.'
     )
     parser.add_argument(
         '-l', '--lesionmask-path',
         dest='lesionmask_path',
-        default='/home/mariano/SNAC_Lesion_ID_Proj_all',
+        default='/home/yangma/1/07003SATH/Consensus.nii.gz',
         help='Parameter to store the working directory.'
     )
     parser.add_argument(
         '-o', '--output-path',
         dest='output_path',
-        default='/home/mariano/SNAC_Lesion_ID_Proj_all',
+        default='/home/yangma/1/output',
         help='Parameter to store the working directory.'
     )
     parser.add_argument(
         '-m', '--model-path',
         dest='model_path',
-        default='/home/mariano/SNAC_Lesion_ID_Proj_all',
+        default='/home/yangma/1/lesions-unet.flair.t1_model.pt',
         help='Parameter to store the working directory.'
     )
     parser.add_argument(
@@ -77,7 +77,7 @@ def parse_args():
         help='GPU id number.'
     )
     parser.add_argument(
-        '-m', '--metric_file',
+        '--metric_file',
         dest='metric_file',
         type=str, default='metrics.csv',
         help='GPU id number.'
@@ -85,7 +85,7 @@ def parse_args():
     parser.add_argument(
         '--general-flag',
         dest='general_flag',
-        action='store_true', default=False,
+        action='store_true', default=True,
         help='Whether to test a network on the working directory.'
     )
     return vars(parser.parse_args())
@@ -123,21 +123,23 @@ def test_net(
         d_file_path=datafile_path, lm_file_path=lesionmask_path, bm_file_path=brainmask_path
     )
 
-    try:
-        seg_bb = net.lesions(
-            testing, verbose=verbose
-        )
-    except RuntimeError:
-        seg_bb = net.patch_lesions(
-            testing, patch_size=128,
-            verbose=verbose
-        )
+    # try:
+    #     seg_bb = net.lesions(
+    #         testing, verbose=verbose
+    #     )
+    # except RuntimeError:
+    seg_bb = net.patch_lesions(
+        testing, patch_size=64,
+        verbose=verbose
+    )
 
     # Use thresholding to get binary lesion mask
-    if len(seg_bb.shape) > 3:
-        seg_im = np.argmax(seg_bb, axis=0) + 1
-    else:
-        seg_im = seg_bb > 0.5
+    # if len(seg_bb.shape) > 3:
+    #     seg_im = np.argmax(seg_bb, axis=0) + 1
+    # else:
+    #     seg_im = seg_bb > 0.5
+    seg_im = seg_bb > 0.5
+    seg_im = seg_im.astype(int)
     lesion_unet = remove_small_regions(seg_im == 1)
 
     # Saving the predicted lesion mask with the same nii header as the ground truth
@@ -153,8 +155,8 @@ def test_net(
     )
 
     # If ground truth mask exists, calculate eval metrics
-    if gt_lesion_mask:
-        test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, 'infer', general_flag=general_flag)
+    if gt_lesion_mask is not None:
+        test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file=metric_file, patient='infer', general_flag=general_flag)
         print("%s\n" % str(test_case_dsc))
     metric_file.close()
 
