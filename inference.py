@@ -2,26 +2,15 @@ import os
 
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2, 3])
 import argparse
-import numpy as np
-import time
-from subprocess import check_call
-from nibabel import load as load_nii
 import nibabel as nib
-from torch.utils.data import DataLoader
-from time import strftime
-from pytorch.utils import color_codes, get_dirs, print_message, time_to_string
 from pytorch.models import LesionsUNet
-from pytorch.datasets import LesionCroppingDataset
 from tools.get_data import (
-    get_data, get_isbi_data, get_lit_data, get_messg_data, get_case, cross_validation_split,
-    cross_validation_split_isbi,
     get_case_seperate_addr
 )
 from tools.lesion_manipulation import (
     remove_small_regions
 )
 from tools.lesion_metrics import get_lesion_metrics
-from data_manipulation.utils import get_bb
 
 
 def parse_args():
