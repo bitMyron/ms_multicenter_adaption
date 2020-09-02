@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2,3])
+os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [3])
 
 import numpy as np
 import time
