@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [3])
+os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2])
 
 import numpy as np
 import time
@@ -266,6 +266,11 @@ def cross_train_test(
         grid_search_file.write("%s;%s;%s;%s;%s\n" % (str(filters), str(dropout), str(patch_size),
                                                      str(sum(val_dscs) / len(val_dscs)),
                                                      str(sum(test_dscs)/len(test_dscs))))
+        print("%s;%s;%s;%s;%s\n" % (str(filters), str(dropout), str(patch_size),
+                                                     str(sum(val_dscs) / len(val_dscs)),
+                                                     str(sum(test_dscs)/len(test_dscs))))
+        print('Avg val/test dsc: %s;%s\n' % (str(sum(val_dscs) / len(val_dscs)),
+                                         str(sum(test_dscs)/len(test_dscs))))
         torch.cuda.empty_cache()
     metric_file.close()
     grid_search_file.close()
