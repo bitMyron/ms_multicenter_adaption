@@ -303,7 +303,7 @@ def train_net(
     if images is None:
         images = ['flair', 't1']
     if filters is None:
-        filters = [int(fi) for fi in args.get('filters', '32,64,128,256,512').split(',')]
+        filters = [int(fi) for fi in args.get('filters', '32/64/128/256/512').split('/')]
     if patch_size is None:
         patch_size = 32
 
