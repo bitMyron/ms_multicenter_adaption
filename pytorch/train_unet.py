@@ -321,12 +321,12 @@ def train_net(
     # Random split the dataset with 90% as training
     dataset_idxes = list(range(len(tr_lesions)))
     random.shuffle(dataset_idxes)
-    d_train = [tr_data[tmpi] for tmpi in dataset_idxes[:0.9*len(dataset_idxes)]]
-    l_train = [tr_lesions[tmpi] for tmpi in dataset_idxes[:0.9*len(dataset_idxes)]]
-    m_train = [tr_brains[tmpi] for tmpi in dataset_idxes[:0.9*len(dataset_idxes)]]
-    d_val = [tr_data[tmpi] for tmpi in dataset_idxes[0.9*len(dataset_idxes):]]
-    l_val = [tr_lesions[tmpi] for tmpi in dataset_idxes[0.9*len(dataset_idxes):]]
-    m_val = [tr_brains[tmpi] for tmpi in dataset_idxes[0.9*len(dataset_idxes):]]
+    d_train = [tr_data[tmpi] for tmpi in dataset_idxes[:int(0.9*len(dataset_idxes))]]
+    l_train = [tr_lesions[tmpi] for tmpi in dataset_idxes[:int(0.9*len(dataset_idxes))]]
+    m_train = [tr_brains[tmpi] for tmpi in dataset_idxes[:int(0.9*len(dataset_idxes))]]
+    d_val = [tr_data[tmpi] for tmpi in dataset_idxes[int(0.9*len(dataset_idxes)):]]
+    l_val = [tr_lesions[tmpi] for tmpi in dataset_idxes[int(0.9*len(dataset_idxes)):]]
+    m_val = [tr_brains[tmpi] for tmpi in dataset_idxes[int(0.9*len(dataset_idxes)):]]
 
     # Initialize unet model
     seg_net = LesionsUNet(
