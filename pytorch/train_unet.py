@@ -278,39 +278,25 @@ def cross_train_test(
 
 
 def train_net(
-        args, net, model_name, p_train, patch_size, overlap, images=None, filters=None,
-        batch_size=16, d_path=None, verbose=0, train_val_split=0.2, task=None
+        args, verbose=0, batch_size=16,
 ):
     """
     Function to train a network with a set of training images.
-    :param args: arguments from the main funciton.
-    :param net: Network to be trained.
-    :param model_name: Name that will be used to save the model weights.
-    :param patch_size: Size of the patches for training.
-    :param overlap: Overlap between the training patches.
-    :param batch_size: Number of patches per batch for training.
-    :param p_train: Images for training.
-    :param d_path: Path to the images.
-    :param verbose: Level of verbosity.
-    :param train_val_split: Ratio for training and validation set split.
-    :param task: Training task name.
+    :param args: arguments from the main function.
+    :param verbose: verbosity of debug info.
+    :param batch_size: batch size for training the model.
     :return: None
     """
     # Init
     c = color_codes()
     dropout = args.get('dropout', 0.5)
     d_path = args.get('dataset_path', None)
-    if images is None:
-        images = ['flair', 't1']
-    if filters is None:
-        filters = [int(fi) for fi in args.get('filters', '32_64_128_256_512').split('_')]
-    if patch_size is None:
-        patch_size = 32
+    images = ['flair', 't1']
+    filters = [int(fi) for fi in args.get('filters', '32_64_128_256_512').split('_')]
+    patch_size = 32
 
-    if args['task']:
-        task = args['task']
-    if d_path is None:
-        d_path = args['dataset_path']
+    task = args['task']
+    d_path = args['dataset_path']
     o_path = args['output_path']
     epochs = args['epochs']
     patience = args['patience']
