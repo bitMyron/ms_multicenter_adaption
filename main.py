@@ -98,7 +98,7 @@ def parse_args():
     parser.add_argument(
         '--filters',
         dest='filters',
-        action='store_true', default='32,64,128,256,512',
+        type=str, default='32_64_128_256_512',
         help='Whether to move the mask back to original space.'
     )
     return vars(parser.parse_args())
