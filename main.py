@@ -5,7 +5,7 @@ The main file running inside the docker (the starting point)
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [3])
 import argparse
-from pytorch.train_unet import test_folder, cross_train_test
+from pytorch.train_unet import test_folder, cross_train_test, train_net
 
 def parse_args():
     """
@@ -95,6 +95,12 @@ def parse_args():
         action='store_true', default=False,
         help='Whether to move the mask back to original space.'
     )
+    parser.add_argument(
+        '--filters',
+        dest='filters',
+        action='store_true', default='32,64,128,256,512',
+        help='Whether to move the mask back to original space.'
+    )
     return vars(parser.parse_args())
 
 
@@ -105,8 +111,8 @@ def main():
 
     args = parse_args()
     # Training with all cases
-    # if args['run_train']:
-    #     train_full_model(args, verbose=1)
+    if args['run_train']:
+        train_net(args, verbose=1)
     if args['run_test']:
         test_folder(args, verbose=1)
         # test_folder(

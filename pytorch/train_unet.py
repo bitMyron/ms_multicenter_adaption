@@ -21,6 +21,7 @@ from tools.lesion_metrics import get_lesion_metrics
 from data_manipulation.utils import get_bb
 import torch
 import itertools
+import random
 
 def cross_train_test(
         args, patch_size=32, images=None, filters=None,
@@ -271,129 +272,119 @@ def cross_train_test(
     grid_search_file.close()
 
 
-# def train_net(
-#         args, net, model_name, p_train, patch_size, overlap, images=None,
-#         batch_size=16, d_path=None, verbose=0, train_val_split=0.2, task=None
-# ):
-#     """
-#     Function to train a network with a set of training images.
-#     :param args: arguments from the main funciton.
-#     :param net: Network to be trained.
-#     :param model_name: Name that will be used to save the model weights.
-#     :param patch_size: Size of the patches for training.
-#     :param overlap: Overlap between the training patches.
-#     :param batch_size: Number of patches per batch for training.
-#     :param p_train: Images for training.
-#     :param d_path: Path to the images.
-#     :param verbose: Level of verbosity.
-#     :param train_val_split: Ratio for training and validation set split.
-#     :param task: Training task name.
-#     :return: None
-#     """
-#     # Init
-#     c = color_codes()
-#     if d_path is None:
-#         d_path = args['dataset_path']
-#     epochs = args['epochs']
-#     patience = args['patience']
-#     training_start = time.time()
-#
-#     # < UNET >
-#     try:
-#         net.load_model(os.path.join(d_path, model_name))
-#     except IOError:
-#         if verbose > 0:
-#             print('Loading the {:}data{:}'.format(c['b'], c['nc']))
-#
-#         # Mariano's data loading
-#         # tr_data, tr_lesions, tr_brains = get_data(
-#         #     p_train, d_path, images=images, preload=False, verbose=verbose
-#         # )
-#
-#         if task == 'lit':
-#             # LIT data loading
-#             tr_data, tr_lesions, tr_brains = get_lit_data(d_path=d_path)
-#         elif task == 'msseg':
-#             # MSSEG2016 data loading
-#             tr_data, tr_lesions, tr_brains = get_messg_data(d_path=d_path)
-#         elif task == 'isbi':
-#             # ISBI data loading
-#             tr_data, tr_lesions, tr_brains = get_isbi_data(d_path=d_path)
-#         else:
-#             # default data loader
-#             tr_data, tr_lesions, tr_brains = get_data(d_path=d_path)
-#
-#         # Datasets / Dataloaders should be added here
-#         if verbose > 1:
-#             print('Preparing the training datasets / dataloaders')
-#         # What follows are hard coded parameters. They could (and probably
-#         # should) be defined as function / command line parameters.
-#         val_split = train_val_split
-#         num_workers = 4
-#         # Here we'll do the training / validation split...
-#         n_samples = len(tr_data)
-#         n_t_samples = int(n_samples * (1 - val_split))
-#
-#         d_train = tr_data[:n_t_samples]
-#         d_val = tr_data[n_t_samples:]
-#
-#         l_train = tr_lesions[:n_t_samples]
-#         l_val = tr_lesions[n_t_samples:]
-#
-#         m_train = tr_brains[:n_t_samples]
-#         m_val = tr_brains[n_t_samples:]
-#
-#         # ... so we can finally define the datasets for the network.
-#         if verbose > 1:
-#             print('Training dataset (with validation)')
-#
-#         train_dataset = LoadLesionCroppingDataset(
-#             d_train, l_train, m_train, patch_size, overlap,
-#             verbose=verbose
-#         )
-#
-#         train_dataloader = DataLoader(
-#             train_dataset, batch_size, True, num_workers=num_workers
-#         )
-#
-#         if verbose > 1:
-#             print('Validation dataset')
-#         val_dataset = LoadLesionCroppingDataset(
-#             d_val, l_val, m_val, patch_size=patch_size,
-#             verbose=verbose
-#         )
-#         val_dataloader = DataLoader(
-#             val_dataset, batch_size, num_workers=num_workers
-#         )
-#
-#         if verbose > 0:
-#             n_params = sum(
-#                 p.numel() for p in net.parameters() if p.requires_grad
-#             )
-#             print(
-#                 '%sStarting training with a unet%s (%s%d%s parameters)' %
-#                 (c['c'], c['nc'], c['b'], n_params, c['nc'])
-#             )
-#
-#         # And all that's left is to train and save the model.
-#         net.fit(
-#             train_dataloader,
-#             val_dataloader,
-#             epochs=epochs,
-#             patience=patience,
-#             verbose=verbose
-#         )
-#         net.save_model(os.path.join(d_path, model_name))
-#
-#     if verbose > 0:
-#         time_str = time.strftime(
-#             '%H hours %M minutes %S seconds',
-#             time.gmtime(time.time() - training_start)
-#         )
-#         print(
-#             '%sTraining finished%s (total time %s)\n' %
-#             (c['r'], c['nc'], time_str)
-#         )
+def train_net(
+        args, net, model_name, p_train, patch_size, overlap, images=None, filters=None,
+        batch_size=16, d_path=None, verbose=0, train_val_split=0.2, task=None
+):
+    """
+    Function to train a network with a set of training images.
+    :param args: arguments from the main funciton.
+    :param net: Network to be trained.
+    :param model_name: Name that will be used to save the model weights.
+    :param patch_size: Size of the patches for training.
+    :param overlap: Overlap between the training patches.
+    :param batch_size: Number of patches per batch for training.
+    :param p_train: Images for training.
+    :param d_path: Path to the images.
+    :param verbose: Level of verbosity.
+    :param train_val_split: Ratio for training and validation set split.
+    :param task: Training task name.
+    :return: None
+    """
+    # Init
+    c = color_codes()
+    dropout = args.get('dropout', 0.5)
+    d_path = args.get('dataset_path', None)
+    if images is None:
+        images = ['flair', 't1']
+    if filters is None:
+        filters = [int(fi) for fi in args.get('filters', '32,64,128,256,512').split(',')]
+    if patch_size is None:
+        patch_size = 32
+
+    if args['task']:
+        task = args['task']
+    if d_path is None:
+        d_path = args['dataset_path']
+    o_path = args['output_path']
+    epochs = args['epochs']
+    patience = args['patience']
+    num_workers = 4
+    model_name = 'lesions-unet.{:}_model.pt'.format('.'.join(images))
+    suffix = 'unet3d'
+    training_start = time.time()
+
+    if task == 'lit':
+        # LIT data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_lit_data(d_path=d_path)
+    elif task == 'msseg':
+        # MSSEG2016 data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_messg_data(d_path=d_path)
+    elif task == 'isbi':
+        # ISBI data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_isbi_data(d_path=d_path)
+    else:
+        # LIT data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_lit_data(d_path=d_path)
+
+    # Random split the dataset with 90% as training
+    dataset_idxes = list(range(len(tr_lesions)))
+    random.shuffle(dataset_idxes)
+    d_train = [tr_data[tmpi] for tmpi in dataset_idxes[:0.9*len(dataset_idxes)]]
+    l_train = [tr_lesions[tmpi] for tmpi in dataset_idxes[:0.9*len(dataset_idxes)]]
+    m_train = [tr_brains[tmpi] for tmpi in dataset_idxes[:0.9*len(dataset_idxes)]]
+    d_val = [tr_data[tmpi] for tmpi in dataset_idxes[0.9*len(dataset_idxes):]]
+    l_val = [tr_lesions[tmpi] for tmpi in dataset_idxes[0.9*len(dataset_idxes):]]
+    m_val = [tr_brains[tmpi] for tmpi in dataset_idxes[0.9*len(dataset_idxes):]]
+
+    # Initialize unet model
+    seg_net = LesionsUNet(
+        conv_filters=filters, n_images=len(images), dropout=dropout
+    )
+    train_dataset = LesionCroppingDataset(
+        d_train, l_train, m_train, patch_size, patch_size // 2,
+    )
+
+    train_dataloader = DataLoader(
+        train_dataset, batch_size, True, num_workers=num_workers
+    )
+    val_dataset = LesionCroppingDataset(
+        d_val, l_val, m_val, patch_size * 2, 0, filtered=False,
+    )
+    val_dataloader = DataLoader(
+        val_dataset, batch_size, num_workers=num_workers
+    )
+
+    if verbose > 0:
+        n_params = sum(
+            p.numel() for p in seg_net.parameters() if p.requires_grad
+        )
+        print(
+            '%sStarting training with a unet%s (%s%d%s parameters)' %
+            (c['c'], c['nc'], c['b'], n_params, c['nc'])
+        )
+
+    # And all that's left is to train and save the model.
+    seg_net.fit(
+        train_dataloader,
+        val_dataloader,
+        epochs=epochs,
+        patience=patience,
+        verbose=verbose
+    )
+
+    seg_net.save_model(os.path.join(o_path, model_name))
+
+    if verbose > 0:
+        time_str = time.strftime(
+            '%H hours %M minutes %S seconds',
+            time.gmtime(time.time() - training_start)
+        )
+        print(
+            '%sTraining finished%s (total time %s)\n' %
+            (c['r'], c['nc'], time_str)
+        )
+    torch.cuda.empty_cache()
 
 
 def test_net(
