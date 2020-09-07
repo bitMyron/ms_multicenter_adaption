@@ -3,7 +3,7 @@ The main file running inside the docker (the starting point)
 """
 # Import the required packages
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [3])
+os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2])
 import argparse
 from pytorch.train_unet import test_folder, cross_train_test, train_net
 
