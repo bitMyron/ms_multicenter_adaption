@@ -458,8 +458,8 @@ def test_net(
         test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_trains[test_case_idx],
                                            fold=0)
         test_dscs.append(test_case_dsc)
-        print("%s\n" % str(test_case_dsc))
-    print("%s\n" % str(sum(test_case_dsc)/len(test_case_dsc)))
+        print("Case %s dsc: %s\n" % (p_trains[test_case_idx], str(test_case_dsc)))
+    print("Average dsc score: %s\n" % str(sum(test_dscs)/len(test_dscs)))
     metric_file.close()
 
 
