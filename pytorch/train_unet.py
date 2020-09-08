@@ -416,7 +416,7 @@ def test_net(
         tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_lit_data(d_path=d_path)
 
     seg_net = LesionsUNet(
-        conv_filters=filters, n_images=len(tr_data), dropout=0
+        conv_filters=filters, n_images=len(tr_data[0]), dropout=0
     )
     seg_net.load_model(model_path)
     spacing = dict(example_nii.header.items())['pixdim'][1:4]
