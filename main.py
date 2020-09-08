@@ -5,7 +5,7 @@ The main file running inside the docker (the starting point)
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in [2])
 import argparse
-from pytorch.train_unet import test_folder, cross_train_test, train_net
+from pytorch.train_unet import test_net, cross_train_test, train_net
 
 def parse_args():
     """
@@ -26,6 +26,12 @@ def parse_args():
     parser.add_argument(
         '-o', '--output-path',
         dest='output_path',
+        default='/home/mariano/SNAC_Lesion_ID_Proj_all',
+        help='Parameter to store the working directory.'
+    )
+    parser.add_argument(
+        '--model-path',
+        dest='model_path',
         default='/home/mariano/SNAC_Lesion_ID_Proj_all',
         help='Parameter to store the working directory.'
     )
@@ -57,13 +63,19 @@ def parse_args():
         '-t', '--task',
         dest='task',
         type=str, default='lit',
-        help='GPU id number.'
+        help='task name'
+    )
+    parser.add_argument(
+        '--model-flag',
+        dest='model_flag',
+        type=str, default='NA',
+        help='task name'
     )
     parser.add_argument(
         '-m', '--metric_file',
         dest='metric_file',
         type=str, default='metrics.csv',
-        help='GPU id number.'
+        help='Metric file name'
     )
     parser.add_argument(
         '--run-train',
@@ -114,7 +126,7 @@ def main():
     if args['run_train']:
         train_net(args, verbose=1)
     if args['run_test']:
-        test_folder(args, verbose=1)
+        test_net(args, verbose=1)
         # test_folder(
         #     net_name='lesions.full-unet.{:}_model.pt', suffix='unet3d.full',
         #     verbose=1

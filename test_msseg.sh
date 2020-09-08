@@ -17,5 +17,7 @@ CUDA_VISIBLE_DEVICES=2,3
 #
 # The weights are defined on the function test_folder (line 654 main.py) and take into account the images.
 # By default it's FLAIR+T1.
-python main.py -d /home/mayang/data/MSSEG2016 -o /home/mayang/data/output/MSSEG2016 -t msseg -m metrics.csv --run-test
+python main.py -d /home/mayang/data/ISBI2015 -o /home/mayang/data/output/ISBI2015 --model-path /home/mayang/data/output/MSSEG2016/lesions-unet.flair.t1_model.pt -t isbi --model-flag msseg -m metrics.csv --run-test --filters 32_64_128_256
+python main.py -d /home/mayang/data/LIT -o /home/mayang/data/output/LIT --model-path /home/mayang/data/output/MSSEG2016/lesions-unet.flair.t1_model.pt -t lit --model-flag msseg -m metrics.csv --run-test --filters 32_64_128_256
+
 

@@ -379,207 +379,88 @@ def train_net(
 
 
 def test_net(
-        args, net, suffix, test_patients, d_path=None, o_path=None, images=None,
-        save_pr=True, nii_name='flair_mni.nii.gz', im_name=None,
-        brain_name=None, verbose=0, task=None, train_val_split=0.2, portion = 0
+        args,  verbose=0
 ):
     """
     Function that tests a fully trained network with a set of testing images.
     :param args: arguments from the main funciton.
-    :param net: Network fully trained.
-    :param suffix: Suffix added to the resulting images.
-    :param test_patients: Set of test images.
-    :param d_path: Path to the test images.
-    :param o_path: Path to store the result images.
-    :param images: Image modalities used for testing.
-    :param save_pr: Whether to save the probability maps or not.
-    :param nii_name: Name of the NIFTI file used for reference when saving the
-     results.
-    :param im_name: Format for the test image name.
-    :param brain_name: Name of the brain mask image.
     :param verbose: Verbosity level
     :return: Lists of the most important metrics and a dictionary with all
      the computed metrics per patient.
     """
     # Init
     c = color_codes()
-    if d_path is None:
-        d_path = args['dataset_path']
-    if o_path is None:
-        o_path = args['output_path']
-    if task is None:
-        task = args['task']
-    if images is None:
-        images = ['flair', 't1']
-    test_start = time.time()
-    general_flag = args['general_flag']
-    if args['metric_file']:
-        metric_file = open(os.path.join(o_path, args['metric_file']), 'w')
+    task = args['task']
+    d_path = args['dataset_path']
+    o_path = args['output_path']
+    model_path = args['model_path']
+    model_flag = args['model_flag']
+    filters = [int(fi) for fi in args.get('filters', '32_64_128_256_512').split('_')]
+    patch_size = 32
+    metric_file = open(os.path.join(o_path, model_flag + '_' + args['metric_file']), 'w')
+    if not os.path.isdir(os.path.join(o_path, model_flag)):
+        os.mkdir(os.path.join(o_path, model_flag))
+    test_dscs = []
+
+    if task == 'lit':
+        # LIT data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_lit_data(d_path=d_path)
+    elif task == 'msseg':
+        # MSSEG2016 data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_messg_data(d_path=d_path)
+    elif task == 'isbi':
+        # ISBI data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_isbi_data(d_path=d_path)
     else:
-        metric_file = None
+        # LIT data loading
+        tr_data, tr_lesions, tr_brains, p_trains, example_nii = get_lit_data(d_path=d_path)
 
-    # Here we'll do the training / validation split...
-    n_samples = len(test_patients)
-    n_t_samples = int(n_samples * (1 - train_val_split))
-    test_patients = test_patients[n_t_samples:]
+    seg_net = LesionsUNet(
+        conv_filters=filters, n_images=len(tr_data), dropout=0
+    )
+    seg_net.load_model(model_path)
+    spacing = dict(example_nii.header.items())['pixdim'][1:4]
 
-    # Since we are using the network on whole images (not patches if
-    # avoidable), we will test image by image. This is extremely fast, so
-    # there is no real need to use batches (for testing) of more than one.
-    n_test = len(test_patients)
-    for pi, p in enumerate(test_patients):
-        patient = test_patients[pi]
-        patient_path = os.path.join(d_path, patient)
-        patient_out_path = os.path.join(o_path, patient)
-        if not os.path.isdir(patient_out_path):
-            os.mkdir(patient_out_path)
-        tests = (n_test - pi + 1)
-        if verbose > 0:
-            test_elapsed = time.time() - test_start
-            test_eta = tests * test_elapsed / (pi + 1)
-            print(
-                '\033[K{:}Testing with patient {:>13} '
-                '{:}({:4d}/{:4d} - {:5.2f}%){:} {:} ETA: {:} {:}'.format(
-                    c['g'], patient, c['c'], pi + 1, n_test,
-                                             100 * (pi + 1) / n_test, c['g'],
-                    time_to_string(test_elapsed), time_to_string(test_eta),
-                    c['nc']
-                ),
-                end='\r'
-            )
-
-        # ( Data loading per patient )
-        # Load mask, source and target and expand the dimensions.
-        testing, tst_brain, gt_lesion_mask, spacing = get_case(
-            p, d_path, images=images, im_format=im_name,
-            brain_name=brain_name, task=task
-        )
-
-        # Brain mask and bounding box
-        # Our goal is to only test inside the bounding box of the
-        # brain. It doesn't make any sense to look for lesions outside
-        # the brain anyways :)
-        idx = np.where(tst_brain)
-
-        bb = tuple(
-            slice(min_i, max_i)
-            for min_i, max_i in zip(
-                np.min(idx, axis=-1), np.max(idx, axis=-1)
-            )
-        )
-
-        # Baseline image (testing)
-        # We will us the NIFTI header for the results.
-        if task == 'lit':
-            nii = load_nii(os.path.join(patient_path, 'flair_corrected.nii.gz'))
-        elif task == 'msseg':
-            nii = load_nii(os.path.join(patient_path, 'FLAIR_preprocessed.nii.gz'))
-        else:
-            nii = load_nii(os.path.join(patient_path, nii_name))
-
-        # Here is where we crop the image to the bounding box.
-        testing = testing[(slice(None),) + bb]
-
-        # ( Testing itself )
-        # That is a tricky part of goof, it was built as a safety measure
-        # and it should never be necessary if testing on MNI space.
-        # However, I feel better leaving it here, just in case. The idea is
-        # to try and test with the bounding box of the whole image (in MNI
-        # space). If that fails due to a lack of GPU RAM, we'll catch the
-        # exception (which is always a RuntimeError) and we will rerun the
-        # test, but this time we'll make patches of the bounding box. The
-        # good news is that both testing functions are implemented in the
-        # class of the network and they take care of the necessary steps.
+    for test_case_idx in range(len(p_trains)):
+        test_brain = tr_data[test_case_idx]
+        gt_lesion_mask = tr_lesions[test_case_idx]
         try:
-            seg = net.lesions(
-                testing, verbose=verbose
+            seg_bb = seg_net.lesions(
+                test_brain, verbose=verbose
             )
         except RuntimeError:
             if verbose > 0:
-                test_elapsed = time.time() - test_start
-                test_eta = tests * test_elapsed / (pi + 1)
                 print(
                     '\033[K{:}CUDA RAM error - '
-                    '{:}Testing again with patches patient {:>13} '
-                    '{:}({:4d}/{:4d} - {:5.2f}%){:} {:}'
-                    ' ETA: {:} {:}'.format(
-                        c['r'], c['g'], patient, c['c'],
-                        pi + 1, n_test, 100 * (pi + 1) / n_test,
-                        c['g'],
-                        time_to_string(test_elapsed),
-                        time_to_string(test_eta),
-                        c['nc']
-                    ),
-                    end='\r'
                 )
-            seg = net.patch_lesions(
-                testing, patch_size=128,
+            seg_bb = seg_net.patch_lesions(
+                test_brain, patch_size=patch_size * 2,
                 verbose=verbose
             )
 
-        # Remember that we cropped the original images, so we need to
-        # insert the segmentation into the original position.
-        seg_bin = np.zeros_like(tst_brain).astype(np.bool)
-        seg_bin[bb] = np.argmax(seg, axis=0).astype(np.bool)
+        if len(seg_bb.shape) > 3:
+            seg_im = np.argmax(seg_bb, axis=0) + 1
+        else:
+            seg_im = seg_bb > 0.5
+        lesion_unet = remove_small_regions(seg_im == 1)
 
-        # This is the only postprocessing currently. The idea is to
-        # remove small lesions which are usually false positives.
-
-        lesion_unet = np.logical_and(seg_bin, tst_brain)
-        # lesion_unet = remove_boundary_regions(lesion_unet, tst_brain)
-        lesion_unet = remove_small_regions(lesion_unet)
-
-        # Finally we'll save a few output images.
-        # First we'll save the lesion mask (network output > 0.5).
         mask_nii = nib.Nifti1Image(
             lesion_unet,
-            nii.get_qform(),
-            nii.get_header()
+            example_nii.get_qform(),
+            example_nii.get_header()
         )
         mask_nii.to_filename(
             os.path.join(
-                patient_out_path, 'lesion_mask_{:}.nii.gz'.format(suffix)
+                o_path, model_flag, 'lesion_mask_{:}.nii.gz'.format(p_trains[test_case_idx])
             )
         )
 
-        get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, patient, general_flag)
-
-        # Then we'll save the probability maps. They are complementary
-        # because we are dealing with a binary problem. But I just like
-        # saving both for visual purposes.
-        if save_pr:
-            # We'll start with the background / brain probability map...
-            pr = np.ones_like(tst_brain).astype(seg.dtype)
-            pr[bb] = seg[0]
-
-            seg_nii = nib.Nifti1Image(
-                pr,
-                nii.get_qform(),
-                nii.get_header()
-            )
-            seg_nii.to_filename(
-                os.path.join(patient_out_path, 'back_prob_%s.nii.gz' % suffix)
-            )
-
-            # ... and we'll end with the lesion one (which is actually the
-            # most interesting one).
-            pr = np.zeros_like(tst_brain).astype(seg.dtype)
-            pr[bb] = seg[1]
-            seg_nii = nib.Nifti1Image(
-                pr,
-                nii.get_qform(),
-                nii.get_header()
-            )
-            seg_nii.to_filename(
-                os.path.join(
-                    patient_path, 'lesion_prob_%s.nii.gz' % suffix
-                )
-            )
-
-    if verbose > 0:
-        print(' ' * 100, end='\r')
-    if metric_file:
-        metric_file.close()
+        test_case_dsc = get_lesion_metrics(gt_lesion_mask, lesion_unet, spacing, metric_file, p_trains[test_case_idx],
+                                           fold=0)
+        test_dscs.append(test_case_dsc)
+        print("%s\n" % str(test_case_dsc))
+    print("%s\n" % str(sum(test_case_dsc)/len(test_case_dsc)))
+    metric_file.close()
 
 
 # def train_full_model(
